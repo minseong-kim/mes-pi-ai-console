@@ -1,0 +1,1 @@
+document.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.language-card').forEach(card=>{card.addEventListener('click',()=>sessionStorage.setItem('mesConsoleLanguage',card.textContent.includes('English')?'en':'ko'))})});

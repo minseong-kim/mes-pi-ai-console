@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MES AI Console — 근본원인분석 · 예지보전 Live Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #090D16;
+    --bg-2: #0C1220;
+    --panel: #111A2E;
+    --panel-2: #16213A;
+    --line: #223056;
+    --line-soft: #1A2540;
+    --text: #EDF1FA;
+    --text-dim: #7C8AAE;
+    --amber: #F5A524;
+    --amber-dim: #7A5A20;
+    --teal: #22D9B6;
+    --teal-dim: #12594C;
+    --red: #FF5C5C;
+    --radius: 4px;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 12% 0%, rgba(34,217,182,0.07), transparent 42%),
+      radial-gradient(circle at 88% 8%, rgba(245,165,36,0.05), transparent 40%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 34px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 34px);
+    color: var(--text);
+    font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:'JetBrains Mono','Consolas',monospace; }
+
+  /* ===== Top status bar ===== */
+  .statusbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 15px 30px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #0D1424, #090D16);
+  }
+  .statusbar-left{ display:flex; align-items:center; gap:14px; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 10px var(--teal); animation: pulse 2s infinite; flex-shrink:0; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+  .sys-title{ font-size:13px; letter-spacing:0.14em; color:var(--text-dim); text-transform:uppercase; font-weight:600; }
+  .sys-sub{ font-size:11px; color:var(--text-dim); margin-top:2px; }
+  .statusbar-right{ display:flex; gap:24px; align-items:center; }
+  .clock{ font-size:13px; color:var(--teal); letter-spacing:0.04em; }
+  .badge{
+    font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase;
+    padding:4px 11px; border:1px solid var(--line); border-radius:20px; color:var(--text-dim);
+  }
+  .badge.live{ border-color: rgba(34,217,182,0.4); color:var(--teal); }
+
+  /* ===== Tab bar ===== */
+  .tabbar{
+    display:flex; gap:4px; padding: 14px 30px 0;
+    border-bottom:1px solid var(--line);
+    background: var(--bg-2);
+  }
+  .tab{
+    font-family:inherit; font-size:13.5px; font-weight:600; letter-spacing:0.01em;
+    background:none; border:none; color:var(--text-dim); cursor:pointer;
+    padding: 12px 20px 14px; position:relative;
+    display:flex; align-items:center; gap:9px;
+    transition: color .2s;
+  }
+  .tab svg{ width:15px; height:15px; opacity:.65; transition:opacity .2s; }
+  .tab:hover{ color:var(--text); }
+  .tab.active{ color:var(--text); }
+  .tab.active svg{ opacity:1; }
+  .tab-underline{
+    position:absolute; bottom:-1px; left:0; height:2px; width:0;
+    background: linear-gradient(90deg, var(--teal), var(--amber));
+    transition: transform .32s cubic-bezier(.4,0,.2,1), width .32s cubic-bezier(.4,0,.2,1);
+  }
+  .tab:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+
+  /* ===== Main layout ===== */
+  .panel{ display:none; flex:1; }
+  .panel.active{ display:grid; grid-template-columns: 1.35fr 1fr; gap:1px; background:var(--line); overflow:hidden; }
+  .col{ background:var(--bg); padding: 26px 30px; overflow-y:auto; }
+
+  .section-label{ font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color: var(--amber); font-weight:600; margin-bottom:6px; }
+  .section-title{ font-size:21px; font-weight:600; margin-bottom:18px; }
+
+  /* ===== Card shell ===== */
+  .card{
+    background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 22px 24px; position:relative;
+  }
+  .card::before{
+    content:''; position:absolute; top:0; left:16px; right:16px; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.09), transparent);
+  }
+  .card-title{ font-size:12px; color:var(--text-dim); margin-bottom:22px; display:flex; justify-content:space-between; letter-spacing:.02em; }
+
+  /* ===== RCA: line schematic ===== */
+  .stations{ position:relative; display:flex; justify-content:space-between; align-items:flex-start; height:62px; }
+  .rail{ position:absolute; top:18px; left:20px; right:20px; height:2px; background: var(--line-soft); }
+  .rail-fill{ position:absolute; top:0; left:0; height:100%; width:0%; background: linear-gradient(90deg, var(--teal), var(--amber)); transition: width 1.1s cubic-bezier(.4,0,.2,1); }
+  .station{ position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:9px; }
+  .node{ width:36px; height:36px; border-radius:50%; background: var(--panel-2); border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:700; color:var(--text-dim); transition: all .4s; }
+  .node.active{ border-color:var(--teal); color:var(--teal); box-shadow:0 0 16px rgba(34,217,182,0.5); }
+  .node.alert{ border-color:var(--red); color:var(--red); box-shadow:0 0 18px rgba(255,92,92,0.6); animation: alertPulse 0.9s infinite; }
+  @keyframes alertPulse{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
+  .station-label{ font-size:10.5px; color:var(--text-dim); text-align:center; white-space:nowrap; }
+  .station-label.active{ color:var(--text); }
+  .defect-marker{ font-size:11px; color:var(--red); font-weight:700; letter-spacing:.05em; opacity:0; transition:opacity .3s; white-space:nowrap; margin:-8px 0 14px; min-height:14px; }
+  .defect-marker.show{ opacity:1; }
+
+  /* ===== PM: chart ===== */
+  .chart-wrap{ position:relative; }
+  .chart-svg{ width:100%; height:auto; display:block; }
+  .chart-line{ fill:none; stroke:url(#lineGrad); stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; }
+  .chart-threshold{ stroke: rgba(255,92,92,0.55); stroke-width:1.3; stroke-dasharray:5 5; }
+  .chart-zone{ fill: var(--amber); opacity:0; transition: opacity .6s; }
+  .chart-zone.show{ opacity:0.09; }
+  .chart-dot{ fill: var(--teal); opacity:0; transition: opacity .3s, fill .3s; }
+  .chart-dot.show{ opacity:1; }
+  .chart-dot.danger{ fill: var(--red); }
+  .chart-endcap{ opacity:0; transition: opacity .3s; }
+  .chart-endcap.show{ opacity:1; }
+  .chart-label{ font-size:9.5px; fill: var(--text-dim); font-family:'JetBrains Mono',monospace; }
+  .chart-threshold-label{ font-size:9.5px; fill: var(--red); font-family:'JetBrains Mono',monospace; opacity:0.85; }
+
+  .btn-row{ display:flex; gap:10px; margin-top:26px; }
+  .btn{ font-family:inherit; font-size:13px; font-weight:600; letter-spacing:0.02em; padding:11px 20px; border-radius:var(--radius); cursor:pointer; border:1px solid var(--line); background:var(--panel-2); color:var(--text); transition: all .15s; }
+  .btn:hover{ border-color:var(--text-dim); }
+  .btn.primary{ background: linear-gradient(180deg,#F5A524,#D9861A); color:#1A1206; border:none; }
+  .btn.primary:hover{ filter:brightness(1.08); }
+  .btn.teal{ background: linear-gradient(180deg,#22D9B6,#159C82); color:#04241D; border:none; }
+  .btn.teal:hover{ filter:brightness(1.08); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+
+  /* ===== Log panel ===== */
+  .log-panel{ background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; height: 260px; overflow-y:auto; margin-top:22px; }
+  .log-row{ display:grid; grid-template-columns: 82px 1fr; gap:14px; padding: 9px 0; border-bottom: 1px dashed rgba(124,138,174,0.15); opacity:0; transform:translateY(4px); animation: rowIn .35s forwards; }
+  .log-row:last-child{ border-bottom:none; }
+  @keyframes rowIn{ to{ opacity:1; transform:translateY(0); } }
+  .log-time{ font-size:11px; color:var(--teal); }
+  .log-text{ font-size:12.5px; color:var(--text); line-height:1.5; }
+  .log-text .k{ color:var(--text-dim); }
+  .log-empty{ color:var(--text-dim); font-size:12.5px; padding:8px 0; }
+
+  /* ===== Right column ===== */
+  .diag-card{ background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; margin-bottom:16px; }
+  .diag-card-title{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin-bottom:15px; }
+
+  .cause-row{ margin-bottom:14px; }
+  .cause-row:last-child{ margin-bottom:0; }
+  .cause-head{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; }
+  .cause-name{ color:var(--text); }
+  .cause-pct{ font-weight:700; }
+  .cause-bar-track{ height:7px; background:var(--panel-2); border-radius:4px; overflow:hidden; }
+  .cause-bar-fill{ height:100%; width:0%; border-radius:4px; transition: width 1s cubic-bezier(.4,0,.2,1); }
+
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .stat-box{ background:var(--panel-2); border-radius:var(--radius); padding:14px 16px; }
+  .stat-label{ font-size:10.5px; color:var(--text-dim); margin-bottom:6px; letter-spacing:.02em; }
+  .stat-value{ font-size:19px; font-weight:700; color:var(--text); }
+  .stat-value.danger{ color:var(--red); }
+  .stat-value.warn{ color:var(--amber); }
+
+  .llm-box{ background: linear-gradient(180deg, rgba(245,165,36,0.08), rgba(245,165,36,0.02)); border:1px solid var(--amber-dim); border-radius:var(--radius); padding:18px 22px; min-height:110px; }
+  .llm-label{ display:flex; align-items:center; gap:9px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); margin-bottom:11px; font-weight:600; }
+  .llm-label svg{ width:15px; height:15px; }
+  .llm-text{ font-size:13.5px; line-height:1.68; color:var(--text); }
+  .cursor{ display:inline-block; width:7px; height:14px; background:var(--amber); vertical-align:middle; margin-left:2px; animation: blink 0.9s steps(1) infinite; }
+  @keyframes blink{ 50%{ opacity:0; } }
+  .placeholder{ color:var(--text-dim); font-size:12.5px; }
+
+  .footer{ padding: 12px 30px; border-top:1px solid var(--line); font-size:10.5px; color:var(--text-dim); display:flex; justify-content:space-between; align-items:center; background: #060910; flex-wrap:wrap; gap:8px; }
+  .stack-tags{ display:flex; gap:8px; flex-wrap:wrap; }
+  .tag{ padding:3px 10px; border:1px solid var(--line); border-radius:12px; letter-spacing:.03em; font-family:'JetBrains Mono',monospace; }
+
+  ::-webkit-scrollbar{ width:8px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+
+  @media (max-width: 880px){
+    .panel.active{ grid-template-columns: 1fr; }
+    .statusbar{ flex-direction:column; align-items:flex-start; gap:8px; }
+    .stat-grid{ grid-template-columns:1fr; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ animation-duration:0.01ms !important; transition-duration:0.01ms !important; } }
+
+  /* ===== Auto-detect badge ===== */
+  .auto-badge{ display:none; align-items:center; gap:5px; font-size:9.5px; letter-spacing:.08em; color:var(--red); font-weight:700; }
+  .auto-badge.on{ display:inline-flex; }
+  .auto-dot{ width:6px;height:6px;border-radius:50%; background:var(--red); animation: pulse 1.1s infinite; box-shadow:0 0 6px var(--red); }
+  .btn.auto-active{ background: linear-gradient(180deg,#FF5C5C,#C23B3B); color:#2a0a0a; border:none; }
+  .btn.auto-active:hover{ filter:brightness(1.08); }
+  .auto-hint{ font-size:10.5px; color:var(--text-dim); margin-top:9px; }
+
+  /* ===== Toast notifications ===== */
+  .toast-container{ position:fixed; top:18px; right:22px; display:flex; flex-direction:column; gap:10px; z-index:60; width:290px; }
+  .toast{ background:var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding:13px 15px; box-shadow:0 10px 28px rgba(0,0,0,0.45); transform:translateX(130%); opacity:0; transition:transform .38s cubic-bezier(.4,0,.2,1), opacity .38s; }
+  .toast.show{ transform:translateX(0); opacity:1; }
+  .toast-head{ display:flex; align-items:center; gap:9px; font-size:12.5px; font-weight:600; color:var(--text); }
+  .toast-head svg{ width:16px; height:16px; color:var(--teal); flex-shrink:0; }
+  .toast-sub{ font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; margin-top:4px; margin-left:25px; }
+  .toast-bar{ height:2px; background:var(--line); border-radius:2px; margin-top:11px; overflow:hidden; }
+  .toast-bar-fill{ height:100%; background:linear-gradient(90deg,var(--teal),var(--amber)); transform-origin:left; animation: toastShrink 3.6s linear forwards; }
+  @keyframes toastShrink{ from{transform:scaleX(1)} to{transform:scaleX(0)} }
+
+  /* ===== Shell / Sidebar ===== */
+  .shell{ flex:1; display:flex; overflow:hidden; }
+  .sidebar{ width:230px; flex-shrink:0; background:var(--bg-2); border-right:1px solid var(--line); padding:16px 10px; display:flex; flex-direction:column; gap:3px; overflow-y:auto; }
+  .nav-btn{ display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:var(--radius); background:none; border:none; color:var(--text-dim); font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; text-align:left; width:100%; transition: background .15s, color .15s; }
+  .nav-btn svg{ width:16px; height:16px; opacity:.65; flex-shrink:0; }
+  .nav-btn:hover{ background:var(--panel); color:var(--text); }
+  .nav-btn.active{ background:var(--panel-2); color:var(--text); }
+  .nav-btn.active svg{ opacity:1; color:var(--teal); }
+  .nav-num{ font-size:9px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; margin-left:auto; opacity:.6; }
+
+  .content-area{ flex:1; display:flex; flex-direction:column; overflow-y:auto; }
+  .view{ display:none; flex-direction:column; flex:1; }
+  .view.active{ display:flex; }
+  .view-header{ padding:24px 30px 4px; }
+  .view-body{ padding:18px 30px 30px; flex:1; }
+  .breadcrumb{ font-size:10.5px; letter-spacing:.14em; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; }
+
+  .grid-4{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  .grid-3{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .grid-2{ display:grid; grid-template-columns:1.1fr 1fr; gap:16px; }
+
+  .process-card{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px; cursor:pointer; transition:border-color .2s, transform .15s; }
+  .process-card:hover{ border-color:var(--text-dim); transform:translateY(-2px); }
+  .pc-name{ font-size:12px; letter-spacing:.05em; color:var(--text-dim); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+  .pc-oee{ font-size:32px; font-weight:700; }
+  .pc-oee small{ font-size:14px; color:var(--text-dim); font-weight:500; }
+  .pc-foot{ margin-top:12px; font-size:11px; color:var(--text-dim); }
+
+  .status-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .status-dot.ok{ background:var(--teal); box-shadow:0 0 6px var(--teal); }
+  .status-dot.warn{ background:var(--amber); box-shadow:0 0 6px var(--amber); }
+  .status-dot.danger{ background:var(--red); box-shadow:0 0 6px var(--red); animation: alertPulse 1s infinite; }
+
+  .mini-gauge-track{ height:6px; background:var(--panel-2); border-radius:4px; overflow:hidden; margin-top:10px; }
+  .mini-gauge-fill{ height:100%; border-radius:4px; }
+
+  .line-card{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; cursor:pointer; transition:border-color .2s, transform .15s; }
+  .line-card:hover{ border-color:var(--text-dim); transform:translateY(-2px); }
+  .line-card.danger{ border-color: rgba(255,92,92,0.45); }
+  .line-card.warn{ border-color: rgba(245,165,36,0.4); }
+  .line-card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:700; font-size:13px; }
+  .line-card-sub{ font-size:11px; color:var(--text-dim); }
+
+  .filter-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+  .select, .date-input{ font-family:inherit; background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:8px 12px; border-radius:var(--radius); font-size:12px; cursor:pointer; }
+  .filter-label{ font-size:11px; color:var(--text-dim); }
+  .fleet-note{ display:none; color:var(--text-dim); font-size:12.5px; padding:30px 0; text-align:center; }
+
+  .line-context{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:16px 30px 0; }
+  .line-context-hint{ display:none; font-size:11px; color:var(--amber); }
+
+  .table-wrap{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+  .table{ width:100%; border-collapse:collapse; font-size:12px; }
+  .table th{ text-align:left; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em; padding:11px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); }
+  .table td{ padding:11px 14px; border-bottom:1px solid var(--line-soft); color:var(--text); }
+  .table tr:last-child td{ border-bottom:none; }
+  .table tr:hover td{ background:rgba(255,255,255,0.02); }
+
+  .status-badge{ display:inline-block; padding:3px 10px; border-radius:12px; font-size:10px; font-weight:700; letter-spacing:.03em; }
+  .status-badge.pending{ background:rgba(245,165,36,0.15); color:var(--amber); }
+  .status-badge.progress{ background:rgba(34,217,182,0.15); color:var(--teal); }
+  .status-badge.done{ background:rgba(124,138,174,0.18); color:var(--text-dim); }
+
+  .filter-tabs{ display:flex; gap:6px; margin-bottom:16px; }
+  .filter-tab{ font-family:inherit; font-size:12px; font-weight:600; padding:8px 16px; border-radius:20px; border:1px solid var(--line); background:none; color:var(--text-dim); cursor:pointer; transition: all .15s; }
+  .filter-tab:hover{ color:var(--text); }
+  .filter-tab.active{ background:var(--panel-2); color:var(--text); border-color:var(--text-dim); }
+
+  .action-btn{ font-family:inherit; font-size:11px; font-weight:600; padding:6px 12px; border-radius:var(--radius); border:1px solid var(--line); background:var(--panel-2); color:var(--text); cursor:pointer; }
+  .action-btn:hover{ border-color:var(--text-dim); }
+  .action-btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+  .stat-mini{ background:var(--panel-2); border-radius:var(--radius); padding:14px 16px; }
+  .stat-mini-label{ font-size:10px; color:var(--text-dim); margin-bottom:6px; }
+  .stat-mini-value{ font-size:17px; font-weight:700; }
+  .oee-note{ margin-top:16px; font-size:11.5px; color:var(--text-dim); }
+  .badge.aggregated{ border-color: rgba(124,138,174,0.35); color:var(--text-dim); }
+  .chart-gridline{ stroke: rgba(255,255,255,0.07); stroke-width: 1; shape-rendering: crispEdges; }
+  .chart-axis-line{ stroke: rgba(255,255,255,0.18); stroke-width: 1; }
+  .chart-axis-label{ font-size:9px; fill: var(--text-dim); font-family:'JetBrains Mono',monospace; }
+
+  .line-card.add-line{ border-style:dashed; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:12.5px; font-weight:600; gap:6px; }
+  .line-card.add-line:hover{ color:var(--text); border-color:var(--text-dim); }
+  .add-line-form{ display:none; align-items:center; gap:10px; margin-top:14px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; }
+  .add-line-form.show{ display:flex; }
+  .add-line-form input{ font-family:inherit; background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:8px 12px; border-radius:var(--radius); font-size:12px; width:110px; }
+
+  /* ===== Issue history + modal ===== */
+  .issue-empty{ color:var(--text-dim); font-size:12px; padding:12px 14px !important; }
+  .issue-row{ cursor:pointer; }
+  .issue-row td{ font-size:11.5px; }
+  .issue-dot-cell{ width:28px; text-align:center; }
+  .issue-new-dot{ width:8px; height:8px; border-radius:50%; background:var(--red); display:inline-block; box-shadow:0 0 6px var(--red); animation: alertPulse 0.9s infinite; }
+
+  .modal-overlay{ position:fixed; inset:0; background:rgba(4,7,14,0.72); backdrop-filter:blur(2px); display:none; align-items:center; justify-content:center; z-index:100; padding:20px; }
+  .modal-overlay.show{ display:flex; }
+  .modal-card{ width:540px; max-width:100%; max-height:85vh; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:26px 28px; position:relative; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+  .modal-close{ position:absolute; top:16px; right:16px; background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; padding:4px; line-height:1; }
+  .modal-close:hover{ color:var(--text); }
+  .modal-kicker{ font-size:11px; letter-spacing:.14em; color:var(--amber); font-weight:700; margin-bottom:8px; }
+  .modal-title{ font-size:19px; font-weight:700; color:var(--text); margin-bottom:6px; padding-right:24px; }
+  .modal-time{ font-size:11.5px; color:var(--teal); margin-bottom:20px; }
+  .modal-section-label{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin-bottom:12px; }
+  .modal-llm-box{ margin-top:20px; background: linear-gradient(180deg, rgba(245,165,36,0.08), rgba(245,165,36,0.02)); border:1px solid var(--amber-dim); border-radius:var(--radius); padding:16px 18px; }
+  .modal-llm-label{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); margin-bottom:8px; font-weight:700; }
+  .modal-llm-text{ font-size:13px; line-height:1.6; color:var(--text); }
+</style>
+</head>
+<body>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="modal-overlay" id="issueModalOverlay" onclick="if(event.target===this) closeIssueModal()">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeIssueModal()">✕</button>
+      <div class="modal-kicker" id="issueModalKicker">ISSUE DETAIL</div>
+      <div class="modal-title" id="issueModalTitle">—</div>
+      <div class="modal-time mono" id="issueModalTime">—</div>
+      <div class="modal-section-label">ROOT CAUSE RANKING</div>
+      <div id="issueModalCauses"></div>
+      <div class="modal-llm-box">
+        <div class="modal-llm-label">LLM EXPLANATION</div>
+        <div class="modal-llm-text" id="issueModalLLM">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <div class="statusbar-left">
+      <div class="dot"></div>
+      <div>
+        <div class="sys-title">MES · Process Innovation Console</div>
+        <div class="sys-sub mono" id="sysSub">CELL LINE 03 — Ingot / Wafer / Cell / Module</div>
+      </div>
+    </div>
+    <div class="statusbar-right">
+      <span class="badge live" id="liveBadge">Live monitoring</span>
+      <span class="clock mono" id="clock">14:31:52</span>
+    </div>
+  </div>
+
+  <div class="shell">
+  <nav class="sidebar">
+    <button class="nav-btn active" id="navBtn-factory" onclick="switchView('factory')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 11h.01M15 11h.01M9 15h.01M15 15h.01"/></svg><span>공장 전체 현황판</span><span class="nav-num">1</span></button>
+    <button class="nav-btn" id="navBtn-fleet" onclick="switchView('fleet')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>라인 목록 현황판</span><span class="nav-num">2</span></button>
+    <button class="nav-btn" id="navBtn-line" onclick="switchView('line')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg><span>라인 상세 · AI 진단</span><span class="nav-num">3</span></button>
+    <button class="nav-btn" id="navBtn-equipment" onclick="switchView('equipment')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4"/></svg><span>설비 상세</span><span class="nav-num">4</span></button>
+    <button class="nav-btn" id="navBtn-history" onclick="switchView('history')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg><span>이력 · 리포트</span><span class="nav-num">5</span></button>
+    <button class="nav-btn" id="navBtn-alerts" onclick="switchView('alerts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg><span>알림 · 작업 관리</span><span class="nav-num">6</span></button>
+  </nav>
+    <div class="content-area">
+
+    <div class="view active" id="view-factory">
+      <div class="view-header">
+        <div class="breadcrumb">HOME</div>
+        <div class="section-label">OVERVIEW</div>
+        <div class="section-title">공장 전체 현황판</div>
+      </div>
+      <div class="view-body">
+        <div class="filter-row" style="margin-bottom:8px;">
+          <span class="filter-label">집계 기간</span>
+        </div>
+        <div class="filter-tabs" id="oeePeriodTabs"><button class="filter-tab" data-period="shift" onclick="setOeePeriod('shift')">교대조 (8~12h)</button><button class="filter-tab active" data-period="daily" onclick="setOeePeriod('daily')">일간 (24h)</button><button class="filter-tab" data-period="weekly" onclick="setOeePeriod('weekly')">주간</button><button class="filter-tab" data-period="monthly" onclick="setOeePeriod('monthly')">월간</button></div>
+        <div class="grid-4">
+      <div class="process-card" onclick="goToFleet('ingot')">
+        <div class="pc-name"><span>INGOT</span><span class="status-dot ok" id="dot-ingot"></span></div>
+        <div class="pc-oee"><span id="oee-ingot">—</span><small>%</small></div>
+        <div class="mini-gauge-track"><div class="mini-gauge-fill" id="gauge-ingot" style="width:0%;"></div></div>
+        <div class="pc-foot"><span id="alarms-ingot">—</span> 알람 · 라인 보기 →</div>
+      </div>
+      <div class="process-card" onclick="goToFleet('wafer')">
+        <div class="pc-name"><span>WAFER</span><span class="status-dot ok" id="dot-wafer"></span></div>
+        <div class="pc-oee"><span id="oee-wafer">—</span><small>%</small></div>
+        <div class="mini-gauge-track"><div class="mini-gauge-fill" id="gauge-wafer" style="width:0%;"></div></div>
+        <div class="pc-foot"><span id="alarms-wafer">—</span> 알람 · 라인 보기 →</div>
+      </div>
+      <div class="process-card" onclick="goToFleet('cell')">
+        <div class="pc-name"><span>CELL</span><span class="status-dot ok" id="dot-cell"></span></div>
+        <div class="pc-oee"><span id="oee-cell">—</span><small>%</small></div>
+        <div class="mini-gauge-track"><div class="mini-gauge-fill" id="gauge-cell" style="width:0%;"></div></div>
+        <div class="pc-foot"><span id="alarms-cell">—</span> 알람 · 라인 보기 →</div>
+      </div>
+      <div class="process-card" onclick="goToFleet('module')">
+        <div class="pc-name"><span>MODULE</span><span class="status-dot ok" id="dot-module"></span></div>
+        <div class="pc-oee"><span id="oee-module">—</span><small>%</small></div>
+        <div class="mini-gauge-track"><div class="mini-gauge-fill" id="gauge-module" style="width:0%;"></div></div>
+        <div class="pc-foot"><span id="alarms-module">—</span> 알람 · 라인 보기 →</div>
+      </div>
+        </div>
+        <div class="oee-note" id="oeeNote">당일(00:00~현재) 누적 실적입니다.</div>
+      </div>
+    </div>
+
+    <div class="view" id="view-fleet">
+      <div class="view-header">
+        <div class="breadcrumb">LINE FLEET</div>
+        <div class="section-label">OVERVIEW</div>
+        <div class="section-title">라인 목록 현황판</div>
+      </div>
+      <div class="view-body">
+        <div class="filter-row">
+          <span class="filter-label">공정 선택</span>
+          <select class="select" id="processSelect" onchange="renderFleet()">
+            <option value="ingot">INGOT</option>
+            <option value="wafer">WAFER</option>
+            <option value="cell" selected>CELL</option>
+            <option value="module">MODULE</option>
+          </select>
+          <button class="btn" onclick="showAddLineForm()">+ 라인 추가</button>
+        </div>
+        <div class="filter-tabs" id="fleetPeriodTabs"><button class="filter-tab" data-period="shift" onclick="setOeePeriod('shift')">교대조 (8~12h)</button><button class="filter-tab active" data-period="daily" onclick="setOeePeriod('daily')">일간 (24h)</button><button class="filter-tab" data-period="weekly" onclick="setOeePeriod('weekly')">주간</button><button class="filter-tab" data-period="monthly" onclick="setOeePeriod('monthly')">월간</button></div>
+        <div class="add-line-form" id="addLineForm">
+          <span class="filter-label">새 라인 번호</span>
+          <input type="text" id="addLineNumInput" placeholder="예: 07" maxlength="3">
+          <button class="btn primary" onclick="confirmAddLine()">추가</button>
+          <button class="btn" onclick="hideAddLineForm()">취소</button>
+        </div>
+        <div class="grid-3" id="fleetGrid"></div>
+        <div class="fleet-note" id="fleetNote"></div>
+      </div>
+    </div>
+
+    <div class="view" id="view-line">
+      <div class="line-context">
+        <span class="filter-label">현재 공정</span>
+        <select class="select" id="lineProcessSelect" onchange="onLineProcessChange()"><option value="ingot">INGOT</option><option value="wafer">WAFER</option><option value="cell">CELL</option><option value="module">MODULE</option></select>
+        <span class="filter-label">현재 라인</span>
+        <select class="select" id="lineSelect" onchange="onLineSelectChange()"></select>
+        <span class="line-context-hint" id="lineSelectHint">선택하신 라인의 실시간 데이터는 준비 중입니다 — 데모 시뮬레이션은 Line 03 기준으로 고정되어 있습니다.</span>
+      </div>
+  <div class="tabbar">
+    <button class="tab active" id="tabBtnRCA" onclick="switchTab('rca')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+      근본원인 자동분석 AI
+    </button>
+    <button class="tab" id="tabBtnPM" onclick="switchTab('pm')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>
+      예지보전 AI
+    </button>
+    <div class="tab-underline" id="tabUnderline"></div>
+  </div>
+
+  <!-- ============ PANEL 1: RCA ============ -->
+  <div class="panel active" id="panel-rca">
+    <div class="col">
+      <div class="section-label">SIMULATION</div>
+      <div class="section-title">근본원인 자동분석 AI</div>
+
+      <div class="card">
+        <div class="card-title"><span>CELL LINE 03 SCHEMATIC</span><span style="display:flex;align-items:center;gap:10px;"><span class="auto-badge" id="rcaAutoBadge"><span class="auto-dot"></span>AUTO</span><span class="mono" id="rcaStepIndicator">STANDBY</span></span></div>
+        <div class="defect-marker mono" id="rcaMarker">⚠ MICROCRACK</div>
+        <div class="stations">
+          <div class="rail"><div class="rail-fill" id="rcaRailFill"></div></div>
+          <div class="station">
+            <div class="node" id="rcaNode1">1</div>
+            <div class="station-label" id="rcaLabel1">투입</div>
+          </div>
+          <div class="station"><div class="node" id="rcaNode2">2</div><div class="station-label" id="rcaLabel2">열처리기#3</div></div>
+          <div class="station"><div class="node" id="rcaNode3">3</div><div class="station-label" id="rcaLabel3">검사장비</div></div>
+          <div class="station"><div class="node" id="rcaNode4">4</div><div class="station-label" id="rcaLabel4">진단 AI</div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="rcaRunBtn" onclick="runRCA()">불량 이벤트 시뮬레이션 실행 ▶</button>
+          <button class="btn" onclick="manualResetRCA()">초기화</button>
+          <button class="btn" id="rcaAutoBtn" onclick="toggleAutoRCA()">실시간 자동 감지 시작 ⏱</button>
+        </div>
+        <div class="auto-hint" id="rcaAutoHint" style="display:none;">자동 감지 모드에서는 6~11초 간격으로 새 불량/이상 징후가 무작위로 발생합니다.</div>
+      </div>
+
+      <div class="section-label" style="margin-top:26px;">DATA COLLECTION LOG</div>
+      <div class="log-panel" id="rcaLogPanel" style="margin-top:8px;">
+        <div class="log-empty">시뮬레이션을 실행하면 실시간 로그가 여기에 표시됩니다.</div>
+      </div>
+
+      <div class="section-label" style="margin-top:22px; display:flex; justify-content:space-between; align-items:center;"><span>ISSUE HISTORY</span><span class="mono" id="rcaAutoCountLabel" style="color:var(--teal);">자동감지 0건</span></div>
+      <div class="table-wrap" style="margin-top:8px;">
+        <table class="table">
+          <thead><tr><th></th><th>시각</th><th>유형</th><th>원인 1순위</th></tr></thead>
+          <tbody id="rcaIssueTable">
+            <tr><td colspan="4" class="issue-empty">아직 기록된 이슈가 없습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="section-label">OUTPUT</div>
+      <div class="section-title">진단 결과</div>
+
+      <div class="diag-card">
+        <div class="diag-card-title">Root Cause Ranking (RandomForest · feature_importances_)</div>
+        <div id="rcaCauses"><div class="placeholder">시뮬레이션 실행 후 원인 후보가 표시됩니다.</div></div>
+      </div>
+
+      <div class="diag-card llm-box">
+        <div class="llm-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="8" width="16" height="11" rx="2"/><path d="M9 8V5a3 3 0 016 0v3M9 13h.01M15 13h.01" stroke-linecap="round"/></svg>
+          LLM Explanation — Claude API
+        </div>
+        <div class="llm-text" id="rcaLLM"><span class="placeholder">대기 중...</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PANEL 2: PM ============ -->
+  <div class="panel" id="panel-pm">
+    <div class="col">
+      <div class="section-label">SIMULATION</div>
+      <div class="section-title">예지보전 AI</div>
+
+      <div class="card">
+        <div class="card-title"><span>HEAT TREATMENT UNIT #3 — VIBRATION TREND</span><span style="display:flex;align-items:center;gap:10px;"><span class="auto-badge" id="pmAutoBadge"><span class="auto-dot"></span>AUTO</span><span class="mono" id="pmStepIndicator">STANDBY</span></span></div>
+        <div class="chart-wrap">
+          <svg class="chart-svg" viewBox="0 0 600 230" id="pmChart">
+            <defs>
+              <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#22D9B6"/>
+                <stop offset="65%" stop-color="#F5A524"/>
+                <stop offset="100%" stop-color="#FF5C5C"/>
+              </linearGradient>
+            </defs>
+            <rect class="chart-zone" id="pmZone" x="386.7" y="15" width="173.3" height="190"></rect>
+            <line class="chart-threshold" x1="40" y1="65" x2="560" y2="65"></line>
+            <text class="chart-threshold-label" x="565" y="68">3.0</text>
+            <polyline class="chart-line" id="pmLine" points="40,105.5 126.7,103.3 213.3,101 300,92 386.7,83 473.3,69.5 560,38"
+              stroke-dasharray="560" stroke-dashoffset="560"></polyline>
+            <circle class="chart-dot" data-i="0" cx="40" cy="105.5" r="3.4"></circle>
+            <circle class="chart-dot" data-i="1" cx="126.7" cy="103.3" r="3.4"></circle>
+            <circle class="chart-dot" data-i="2" cx="213.3" cy="101" r="3.4"></circle>
+            <circle class="chart-dot" data-i="3" cx="300" cy="92" r="3.4"></circle>
+            <circle class="chart-dot" data-i="4" cx="386.7" cy="83" r="3.4"></circle>
+            <circle class="chart-dot" data-i="5" cx="473.3" cy="69.5" r="3.4"></circle>
+            <circle class="chart-dot danger" data-i="6" cx="560" cy="38" r="4.4"></circle>
+            <g class="chart-endcap" id="pmEndcap">
+              <circle cx="560" cy="38" r="9" fill="none" stroke="#FF5C5C" stroke-width="1.4"><animate attributeName="r" values="6;13;6" dur="1.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0;0.8" dur="1.4s" repeatCount="indefinite"/></circle>
+            </g>
+            <text class="chart-label" x="40" y="215">D-6</text>
+            <text class="chart-label" x="126.7" y="215">D-5</text>
+            <text class="chart-label" x="213.3" y="215">D-4</text>
+            <text class="chart-label" x="300" y="215">D-3</text>
+            <text class="chart-label" x="386.7" y="215">D-2</text>
+            <text class="chart-label" x="473.3" y="215">D-1</text>
+            <text class="chart-label" x="546" y="215">D-0</text>
+          </svg>
+        </div>
+        <div class="btn-row">
+          <button class="btn teal" id="pmRunBtn" onclick="runPM()">설비 진단 시뮬레이션 실행 ▶</button>
+          <button class="btn" onclick="manualResetPM()">초기화</button>
+          <button class="btn" id="pmAutoBtn" onclick="toggleAutoPM()">실시간 자동 감지 시작 ⏱</button>
+        </div>
+        <div class="auto-hint" id="pmAutoHint" style="display:none;">자동 감지 모드에서는 6~11초 간격으로 새 불량/이상 징후가 무작위로 발생합니다.</div>
+      </div>
+
+      <div class="section-label" style="margin-top:26px;">SENSOR EVENT LOG</div>
+      <div class="log-panel" id="pmLogPanel" style="margin-top:8px;">
+        <div class="log-empty">시뮬레이션을 실행하면 실시간 로그가 여기에 표시됩니다.</div>
+      </div>
+
+      <div class="section-label" style="margin-top:22px; display:flex; justify-content:space-between; align-items:center;"><span>ISSUE HISTORY</span><span class="mono" id="pmAutoCountLabel" style="color:var(--teal);">자동감지 0건</span></div>
+      <div class="table-wrap" style="margin-top:8px;">
+        <table class="table">
+          <thead><tr><th></th><th>시각</th><th>유형</th><th>원인 1순위</th></tr></thead>
+          <tbody id="pmIssueTable">
+            <tr><td colspan="4" class="issue-empty">아직 기록된 이슈가 없습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="section-label">OUTPUT</div>
+      <div class="section-title">이상탐지 결과</div>
+
+      <div class="diag-card">
+        <div class="diag-card-title">Anomaly Detection (Isolation Forest)</div>
+        <div class="stat-grid" id="pmStats">
+          <div class="stat-box"><div class="stat-label">이상 점수</div><div class="stat-value" id="pmScoreVal">—</div></div>
+          <div class="stat-box"><div class="stat-label">추세</div><div class="stat-value" id="pmTrendVal">—</div></div>
+          <div class="stat-box"><div class="stat-label">고장 확률 (72h 내)</div><div class="stat-value danger" id="pmProbVal">—</div></div>
+          <div class="stat-box"><div class="stat-label">권장 조치</div><div class="stat-value warn" id="pmActionVal" style="font-size:13px;">—</div></div>
+        </div>
+      </div>
+
+      <div class="diag-card llm-box">
+        <div class="llm-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="8" width="16" height="11" rx="2"/><path d="M9 8V5a3 3 0 016 0v3M9 13h.01M15 13h.01" stroke-linecap="round"/></svg>
+          LLM Explanation — Claude API
+        </div>
+        <div class="llm-text" id="pmLLM"><span class="placeholder">대기 중...</span></div>
+      </div>
+    </div>
+  </div>
+
+
+    </div>
+
+    <div class="view" id="view-equipment">
+      <div class="view-header">
+        <div class="breadcrumb">EQUIPMENT</div>
+        <div class="section-label">DETAIL</div>
+        <div class="section-title">설비 상세</div>
+      </div>
+      <div class="view-body">
+        <div class="filter-row">
+          <span class="filter-label">공정 선택</span>
+          <select class="select" id="equipProcessSelect" onchange="onEquipProcessChange()"><option value="CELL" selected>CELL</option><option value="INGOT">INGOT</option><option value="WAFER">WAFER</option><option value="MODULE">MODULE</option></select>
+          <span class="filter-label">설비 선택</span>
+          <select class="select" id="equipSelect" onchange="renderEquipment()"></select>
+        </div>
+        <div class="filter-tabs" id="equipPeriodTabs"><button class="filter-tab" data-period="24h" onclick="setEquipPeriod('24h')">24시간</button><button class="filter-tab active" data-period="7d" onclick="setEquipPeriod('7d')">7일</button><button class="filter-tab" data-period="30d" onclick="setEquipPeriod('30d')">30일</button></div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><span id="equipTrendTitle">최근 7일 진동 센서 추이</span><span></span></div>
+            <div class="chart-wrap">
+              <svg class="chart-svg" viewBox="0 0 600 230">
+                <defs><linearGradient id="lineGrad2" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#22D9B6"/><stop offset="100%" stop-color="#F5A524"/>
+                </linearGradient></defs>
+                <g id="equipGridLines"></g>
+                <text class="chart-label" x="2" y="22">위험</text>
+                <text class="chart-label" x="2" y="111">주의</text>
+                <text class="chart-label" x="2" y="199">정상</text>
+                <polyline id="equipChartLine" points="" fill="none" stroke="url(#lineGrad2)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                <g id="equipDotsGroup"></g>
+                <g id="equipXLabels"></g>
+              </svg>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>STATUS</span><span></span></div>
+            <div class="stat-grid"><div class="stat-mini"><div class="stat-mini-label">가동 시간</div><div class="stat-mini-value" id="equipUptime">—</div></div><div class="stat-mini"><div class="stat-mini-label">마지막 정비일</div><div class="stat-mini-value" id="equipLastMaint">—</div></div><div class="stat-mini"><div class="stat-mini-label">다음 정비 예정</div><div class="stat-mini-value" id="equipNextMaint">—</div></div><div class="stat-mini"><div class="stat-mini-label">예상 잔여수명(RUL)</div><div class="stat-mini-value" id="equipRUL">—</div></div></div>
+          </div>
+        </div>
+        <div class="section-label" style="margin-top:24px;">정비 이력</div>
+        <div class="table-wrap" style="margin-top:8px;">
+          <table class="table">
+            <thead><tr><th>날짜</th><th>유형</th><th>담당자</th><th>메모</th></tr></thead>
+            <tbody id="equipMaintTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="view" id="view-history">
+      <div class="view-header">
+        <div class="breadcrumb">HISTORY</div>
+        <div class="section-label">ANALYTICS</div>
+        <div class="section-title">이력 · 리포트</div>
+      </div>
+      <div class="view-body">
+        <div class="filter-row">
+          <span class="filter-label">공정 선택 *</span>
+          <select class="select" id="histProcessFilter" onchange="onHistProcessChange()"><option value="CELL" selected>CELL</option><option value="INGOT">INGOT</option><option value="WAFER">WAFER</option><option value="MODULE">MODULE</option></select>
+          <span class="filter-label">라인</span>
+          <select class="select" id="histLineFilter"></select>
+          <span class="filter-label">불량유형</span>
+          <select class="select" id="histTypeFilter"></select>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">시작일</span>
+          <input class="date-input" type="date" id="histDateFrom" value="2026-07-01">
+          <span class="filter-label">종료일</span>
+          <input class="date-input" type="date" id="histDateTo" value="2026-07-27">
+          <button class="btn" onclick="applyHistoryFilter()">조회</button>
+          <button class="btn primary" onclick="showToast('다운로드 완료','defect_report_2026Q3.pdf (시뮬레이션)','info')">리포트 다운로드 (PDF)</button>
+        </div>
+        <div class="auto-hint" style="display:block;margin-top:-8px;margin-bottom:18px;">* 공정 선택은 필수이며, 라인·불량유형은 선택하지 않으면 전체(All) 기준으로 조회됩니다.</div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-title"><span id="histChartTitle">주간 불량률 추이</span><span></span></div>
+          <div class="chart-wrap">
+            <svg class="chart-svg" viewBox="0 0 600 160">
+              <g id="histGridLines"></g>
+              <text class="chart-label" x="2" y="19">8%</text>
+              <text class="chart-label" x="2" y="74">4%</text>
+              <text class="chart-label" x="2" y="129">0%</text>
+              <polyline id="histTrendLine" points="" fill="none" stroke="#F5A524" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+              <g id="histTrendDots"></g>
+              <g id="histXLabels"></g>
+            </svg>
+          </div>
+        </div>
+
+        <div class="section-label">최근 진단 이력</div>
+        <div class="table-wrap" style="margin-top:8px;">
+          <table class="table"><thead><tr><th>일시</th><th>공정</th><th>라인</th><th>불량유형</th><th>원인</th><th>상태</th></tr></thead><tbody id="historyTableBody"><tr data-process="CELL" data-line="L03" data-type="미세균열"><td>2026-07-14 14:32</td><td>CELL</td><td>L03</td><td>미세균열</td><td>열처리기#3 온도 이상 (82→93℃)</td><td><span class="status-badge done">완료</span></td></tr><tr data-process="INGOT" data-line="L01" data-type="결정결함"><td>2026-07-13 09:14</td><td>INGOT</td><td>L01</td><td>결정결함</td><td>성장로#1 냉각 속도 이상</td><td><span class="status-badge done">완료</span></td></tr><tr data-process="WAFER" data-line="L01" data-type="두께 편차"><td>2026-07-12 11:02</td><td>WAFER</td><td>L01</td><td>두께 편차</td><td>와이어쏘 장력 이상</td><td><span class="status-badge done">완료</span></td></tr><tr data-process="MODULE" data-line="L01" data-type="배선 접촉불량"><td>2026-07-11 16:21</td><td>MODULE</td><td>L01</td><td>배선 접촉불량</td><td>솔더링 온도 편차</td><td><span class="status-badge done">완료</span></td></tr><tr data-process="CELL" data-line="L03" data-type="색상 불균일"><td>2026-07-10 15:03</td><td>CELL</td><td>L03</td><td>색상 불균일</td><td>확산로#2 온도 편차</td><td><span class="status-badge done">완료</span></td></tr><tr data-process="INGOT" data-line="L01" data-type="기공결함"><td>2026-07-09 09:47</td><td>INGOT</td><td>L01</td><td>기공결함</td><td>도가니 회전속도 이상</td><td><span class="status-badge done">완료</span></td></tr><tr data-process="WAFER" data-line="L01" data-type="표면 스크래치"><td>2026-07-08 11:35</td><td>WAFER</td><td>L01</td><td>표면 스크래치</td><td>세정롤러 마모</td><td><span class="status-badge done">완료</span></td></tr><tr data-process="CELL" data-line="L03" data-type="진동 이상"><td>2026-07-07 D-0</td><td>CELL</td><td>L03</td><td>진동 이상</td><td>열처리기#3 진동 지속 상승</td><td><span class="status-badge done">완료</span></td></tr><tr data-process="MODULE" data-line="L01" data-type="실링 불량"><td>2026-07-05 16:21</td><td>MODULE</td><td>L01</td><td>실링 불량</td><td>라미네이터#2 온도 편차</td><td><span class="status-badge done">완료</span></td></tr><tr data-process="CELL" data-line="L03" data-type="베어링 마모 징후"><td>2026-07-03 D-0</td><td>CELL</td><td>L03</td><td>베어링 마모 징후</td><td>베어링 마모로 인한 불규칙 진동</td><td><span class="status-badge done">완료</span></td></tr></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="view" id="view-alerts">
+      <div class="view-header">
+        <div class="breadcrumb">TASKS</div>
+        <div class="section-label">OPERATIONS</div>
+        <div class="section-title">알림 · 작업 관리</div>
+      </div>
+      <div class="view-body">
+        <div class="filter-row">
+          <span class="filter-label">공정 선택</span>
+          <select class="select" id="alertProcessFilter" onchange="applyAlertFilter()"><option value="ALL">ALL</option><option value="CELL">CELL</option><option value="INGOT">INGOT</option><option value="WAFER">WAFER</option><option value="MODULE">MODULE</option></select>
+        </div>
+        <div class="filter-tabs"><button class="filter-tab active" id="filterBtn-all" onclick="setAlertFilter('all')">전체</button><button class="filter-tab" id="filterBtn-pending" onclick="setAlertFilter('pending')">대기</button><button class="filter-tab" id="filterBtn-progress" onclick="setAlertFilter('progress')">진행중</button><button class="filter-tab" id="filterBtn-done" onclick="setAlertFilter('done')">완료</button></div>
+        <div class="table-wrap">
+          <table class="table"><thead><tr><th>시각</th><th>공정</th><th>라인</th><th>알림유형</th><th>상태</th><th>담당자</th><th>액션</th></tr></thead><tbody id="alertsTableBody"><tr id="alertRow0" data-status="pending" data-process="CELL">
+          <td>14:32</td><td>CELL</td><td>L03</td><td>원인분석: 미세균열</td>
+          <td><span class="status-badge pending">대기</span></td>
+          <td><select class="select" style="font-size:11px;padding:5px 8px;"><option>김민수</option><option>이서연</option><option>박준영</option></select></td>
+          <td><button class="action-btn" onclick="cycleAlertStatus('alertRow0')">확인</button></td>
+        </tr><tr id="alertRow1" data-status="progress" data-process="INGOT">
+          <td>13:58</td><td>INGOT</td><td>L01</td><td>원인분석: 기공결함</td>
+          <td><span class="status-badge progress">진행중</span></td>
+          <td><select class="select" style="font-size:11px;padding:5px 8px;"><option>이서연</option><option>박준영</option><option>김민수</option></select></td>
+          <td><button class="action-btn" onclick="cycleAlertStatus('alertRow1')">확인</button></td>
+        </tr><tr id="alertRow2" data-status="progress" data-process="WAFER">
+          <td>11:20</td><td>WAFER</td><td>L01</td><td>이상탐지: 표면 스크래치 징후</td>
+          <td><span class="status-badge progress">진행중</span></td>
+          <td><select class="select" style="font-size:11px;padding:5px 8px;"><option>박준영</option><option>김민수</option><option>이서연</option></select></td>
+          <td><button class="action-btn" onclick="cycleAlertStatus('alertRow2')">확인</button></td>
+        </tr><tr id="alertRow3" data-status="done" data-process="MODULE">
+          <td>09:41</td><td>MODULE</td><td>L01</td><td>원인분석: 배선 접촉불량</td>
+          <td><span class="status-badge done">완료</span></td>
+          <td><select class="select" style="font-size:11px;padding:5px 8px;"><option>김민수</option><option>이서연</option><option>박준영</option></select></td>
+          <td><button class="action-btn" disabled onclick="cycleAlertStatus('alertRow3')">완료됨</button></td>
+        </tr><tr id="alertRow4" data-status="done" data-process="CELL">
+          <td>08:15</td><td>CELL</td><td>L03</td><td>예지보전: 베어링 마모 징후</td>
+          <td><span class="status-badge done">완료</span></td>
+          <td><select class="select" style="font-size:11px;padding:5px 8px;"><option>이서연</option><option>박준영</option><option>김민수</option></select></td>
+          <td><button class="action-btn" disabled onclick="cycleAlertStatus('alertRow4')">완료됨</button></td>
+        </tr><tr id="alertRow5" data-status="done" data-process="CELL">
+          <td>07:02</td><td>CELL</td><td>L04</td><td>원인분석: 색상 불균일</td>
+          <td><span class="status-badge done">완료</span></td>
+          <td><select class="select" style="font-size:11px;padding:5px 8px;"><option>박준영</option><option>김민수</option><option>이서연</option></select></td>
+          <td><button class="action-btn" disabled onclick="cycleAlertStatus('alertRow5')">완료됨</button></td>
+        </tr></tbody></table>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span id="footerStack">MES 화면 계층: 공장 전체 → 라인 목록 → 라인 상세 → 설비 상세 → 이력/리포트 → 알림 관리</span>
+    <div class="stack-tags">
+      <span class="tag">Spring Boot</span>
+      <span class="tag">RandomForest / IsolationForest</span>
+      <span class="tag">Claude Tool Use</span>
+    </div>
+  </div>
+
+<script>
+  function tick(){
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toTimeString().slice(0,8);
+  }
+  setInterval(tick, 1000); tick();
+
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+  // ---- Tabs ----
+  function switchTab(name){
+    const isRCA = name === 'rca';
+    document.getElementById('panel-rca').classList.toggle('active', isRCA);
+    document.getElementById('panel-pm').classList.toggle('active', !isRCA);
+    document.getElementById('tabBtnRCA').classList.toggle('active', isRCA);
+    document.getElementById('tabBtnPM').classList.toggle('active', !isRCA);
+    document.getElementById('sysSub').textContent = isRCA
+      ? 'CELL LINE 03 — Ingot / Wafer / Cell / Module'
+      : 'HEAT TREATMENT UNIT #3 — Predictive Maintenance';
+    document.getElementById('footerStack').textContent = isRCA
+      ? '실제 프로덕션 아키텍처: Java Spring Boot · Smile RandomForest · Oracle/MS-SQL · Claude API (Tool Use)'
+      : '실제 프로덕션 아키텍처: Java Spring Boot · Smile IsolationForest · 시계열 DB · Claude API (Tool Use)';
+    positionUnderline();
+  }
+  function positionUnderline(){
+    const active = document.querySelector('.tab.active');
+    const bar = document.querySelector('.tabbar');
+    const u = document.getElementById('tabUnderline');
+    const rect = active.getBoundingClientRect();
+    const barRect = bar.getBoundingClientRect();
+    u.style.width = rect.width + 'px';
+    u.style.transform = `translateX(${rect.left - barRect.left}px)`;
+  }
+  window.addEventListener('resize', positionUnderline);
+  window.addEventListener('load', positionUnderline);
+
+  // ================= RCA DEMO =================
+  let currentRcaScenario = null;
+  let rcaRunning = false;
+
+  function resetRCA(){
+    rcaRunning = false;
+    document.getElementById('rcaRunBtn').disabled = false;
+    document.getElementById('rcaRailFill').style.width = '0%';
+    document.getElementById('rcaMarker').classList.remove('show');
+    document.getElementById('rcaStepIndicator').textContent = 'STANDBY';
+    [1,2,3,4].forEach(n=>{
+      document.getElementById('rcaNode'+n).classList.remove('active','alert');
+      document.getElementById('rcaLabel'+n).classList.remove('active');
+    });
+    document.getElementById('rcaLogPanel').innerHTML = '<div class="log-empty">시뮬레이션을 실행하면 실시간 로그가 여기에 표시됩니다.</div>';
+    document.getElementById('rcaCauses').innerHTML = '<div class="placeholder">시뮬레이션 실행 후 원인 후보가 표시됩니다.</div>';
+    document.getElementById('rcaLLM').innerHTML = '<span class="placeholder">대기 중...</span>';
+  }
+
+  async function runRCA(shouldNotify = true){
+    if(rcaRunning) return;
+    rcaRunning = true;
+    resetRCA();
+    rcaRunning = true;
+    document.getElementById('rcaRunBtn').disabled = true;
+
+    document.getElementById('rcaStepIndicator').textContent = 'RUNNING · STAGE 1/4';
+    document.getElementById('rcaNode1').classList.add('active');
+    document.getElementById('rcaLabel1').classList.add('active');
+    document.getElementById('rcaRailFill').style.width = '20%';
+    await sleep(500);
+
+    document.getElementById('rcaStepIndicator').textContent = 'RUNNING · STAGE 2/4';
+    document.getElementById('rcaNode2').classList.add('active');
+    document.getElementById('rcaLabel2').classList.add('active');
+    document.getElementById('rcaRailFill').style.width = '45%';
+    await sleep(600);
+
+    document.getElementById('rcaStepIndicator').textContent = 'DEFECT DETECTED';
+    document.getElementById('rcaNode3').classList.add('alert');
+    document.getElementById('rcaLabel3').classList.add('active');
+    document.getElementById('rcaRailFill').style.width = '72%';
+    document.getElementById('rcaMarker').classList.add('show');
+    await sleep(700);
+
+    const logPanel = document.getElementById('rcaLogPanel');
+    logPanel.innerHTML = '';
+    for(const step of currentRcaScenario.logSteps){
+      const row = document.createElement('div');
+      row.className = 'log-row';
+      row.innerHTML = `<div class="log-time mono">${step.t}</div><div class="log-text">${step.html}</div>`;
+      logPanel.appendChild(row);
+      logPanel.scrollTop = logPanel.scrollHeight;
+      await sleep(430);
+    }
+
+    document.getElementById('rcaStepIndicator').textContent = 'DIAGNOSIS COMPLETE';
+    document.getElementById('rcaNode4').classList.add('active');
+    document.getElementById('rcaLabel4').classList.add('active');
+    document.getElementById('rcaRailFill').style.width = '100%';
+    await sleep(300);
+
+    const container = document.getElementById('rcaCauses');
+    container.innerHTML = '';
+    currentRcaScenario.causes.forEach((c,i)=>{
+      const row = document.createElement('div');
+      row.className = 'cause-row';
+      row.innerHTML = `<div class="cause-head"><span class="cause-name">${c.name}</span><span class="cause-pct mono" style="color:${i===0?'#FF5C5C':'#EDF1FA'}">${c.pct}%</span></div><div class="cause-bar-track"><div class="cause-bar-fill" style="background:${c.color}"></div></div>`;
+      container.appendChild(row);
+    });
+    await sleep(80);
+    currentRcaScenario.causes.forEach((c,i)=>{
+      setTimeout(()=>{ const fills = container.querySelectorAll('.cause-bar-fill'); if(fills[i]) fills[i].style.width = c.pct + '%'; }, i*150);
+    });
+
+    await sleep(900);
+    await typeText('rcaLLM', currentRcaScenario.llmFull);
+
+    if(shouldNotify){
+      appendLogRow('rcaLogPanel', currentRcaScenario.notifyTime, '<span class="k">[NOTIFY]</span> 담당자에게 이메일·SMS 자동 발송 완료');
+      await sendAlerts(currentRcaScenario.email, currentRcaScenario.sms);
+    }
+
+    document.getElementById('rcaRunBtn').disabled = false;
+    rcaRunning = false;
+  }
+
+  // ================= PM DEMO =================
+  const PM_VARIANT_PRIMARY = {
+    title: '열처리기#3 진동 이상',
+    score: '0.78 / 1.0', trend: '3일간 지속 상승', prob: '78%', action: '야간 비가동 시간 점검',
+    logSteps: [
+      { t: 'D-6~D-3', html: '<span class="k">[BASELINE]</span> 진동값 2.1~2.3 근처 안정 — 정상 범위' },
+      { t: 'D-3~D-2', html: '<span class="k">[DRIFT]</span> 진동값 2.4→2.6 완만한 상승 시작 — 오차 범위로 보이는 수준' },
+      { t: 'D-2', html: '<span class="k">[ANOMALY]</span> Isolation Forest 이상 점수 임계치 초과 감지' },
+      { t: 'D-0', html: '<span class="k">[FORECAST]</span> 72시간 내 고장 확률 78% 산출, LLM 경보 생성' },
+    ],
+    llmFull: '열처리기#3 진동값이 3일간 지속 상승 중이며, 고장 확률 78%로 추정됩니다(72시간 내). 임계값 기반 알람은 D-0에야 울리지만, 이상탐지 모델은 D-2 시점에 이미 경보를 발령했습니다. 야간 비가동 시간에 점검을 권장합니다.',
+    causes: [{ name: '열처리기#3 진동 지속 상승 (D-2 임계 초과)', pct: 78 }],
+  };
+  let currentPmScenario = PM_VARIANT_PRIMARY;
+  function pickRandomPmVariant(){
+    currentPmScenario = (Math.random() < 0.5) ? PM_VARIANT_PRIMARY : PM_VARIANT_ALT;
+  }
+  let pmRunning = false;
+
+  function resetPM(){
+    pmRunning = false;
+    document.getElementById('pmRunBtn').disabled = false;
+    document.getElementById('pmStepIndicator').textContent = 'STANDBY';
+    const line = document.getElementById('pmLine');
+    line.style.transition = 'none';
+    line.style.strokeDashoffset = '560';
+    document.querySelectorAll('.chart-dot').forEach(d=>d.classList.remove('show'));
+    document.getElementById('pmZone').classList.remove('show');
+    document.getElementById('pmEndcap').classList.remove('show');
+    document.getElementById('pmLogPanel').innerHTML = '<div class="log-empty">시뮬레이션을 실행하면 실시간 로그가 여기에 표시됩니다.</div>';
+    ['pmScoreVal','pmTrendVal','pmProbVal','pmActionVal'].forEach(id=>{ document.getElementById(id).textContent = '—'; });
+    document.getElementById('pmLLM').innerHTML = '<span class="placeholder">대기 중...</span>';
+  }
+
+  async function runPM(shouldNotify = true){
+    if(pmRunning) return;
+    pmRunning = true;
+    resetPM();
+    pmRunning = true;
+    document.getElementById('pmRunBtn').disabled = true;
+    await sleep(50);
+
+    document.getElementById('pmStepIndicator').textContent = 'DRAWING TREND...';
+    const line = document.getElementById('pmLine');
+    line.style.transition = 'stroke-dashoffset 1.8s cubic-bezier(.4,0,.2,1)';
+    void line.getBoundingClientRect();
+    line.style.strokeDashoffset = '0';
+
+    const dots = document.querySelectorAll('.chart-dot');
+    for(let i=0;i<dots.length;i++){
+      setTimeout(()=>dots[i].classList.add('show'), 220*i);
+    }
+    await sleep(1900);
+
+    document.getElementById('pmStepIndicator').textContent = 'THRESHOLD BREACH';
+    document.getElementById('pmZone').classList.add('show');
+    document.getElementById('pmEndcap').classList.add('show');
+    await sleep(500);
+
+    const logPanel = document.getElementById('pmLogPanel');
+    logPanel.innerHTML = '';
+    for(const step of currentPmScenario.logSteps){
+      const row = document.createElement('div');
+      row.className = 'log-row';
+      row.innerHTML = `<div class="log-time mono">${step.t}</div><div class="log-text">${step.html}</div>`;
+      logPanel.appendChild(row);
+      logPanel.scrollTop = logPanel.scrollHeight;
+      await sleep(480);
+    }
+
+    document.getElementById('pmStepIndicator').textContent = 'DIAGNOSIS COMPLETE';
+    document.getElementById('pmScoreVal').textContent = currentPmScenario.score;
+    document.getElementById('pmTrendVal').textContent = currentPmScenario.trend;
+    document.getElementById('pmProbVal').textContent = currentPmScenario.prob;
+    document.getElementById('pmActionVal').textContent = currentPmScenario.action;
+    await sleep(600);
+
+    await typeText('pmLLM', currentPmScenario.llmFull);
+
+    if(shouldNotify){
+      appendLogRow('pmLogPanel', 'D-0', '<span class="k">[NOTIFY]</span> 정비팀에게 이메일·SMS 자동 발송 완료');
+      await sendAlerts('maintenance-team@qcells.com', '010-****-7734');
+    }
+
+    document.getElementById('pmRunBtn').disabled = false;
+    pmRunning = false;
+  }
+
+  async function typeText(elId, full){
+    const el = document.getElementById(elId);
+    el.innerHTML = '<span class="typed"></span><span class="cursor"></span>';
+    const typedEl = el.querySelector('.typed');
+    for(let i=0;i<full.length;i++){
+      typedEl.textContent += full[i];
+      await sleep(13);
+    }
+    const cur = el.querySelector('.cursor');
+    if(cur) cur.style.display = 'none';
+  }
+
+  // ================= AUTO-DETECT + NOTIFICATIONS =================
+  const EMAIL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>`;
+  const SMS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`;
+  const INFO_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>`;
+
+  function showToast(title, sub, kind){
+    const container = document.getElementById('toastContainer');
+    const el = document.createElement('div');
+    el.className = 'toast';
+    const icon = kind === 'email' ? EMAIL_ICON : (kind === 'sms' ? SMS_ICON : INFO_ICON);
+    el.innerHTML = `<div class="toast-head">${icon}<span>${title}</span></div><div class="toast-sub">${sub}</div><div class="toast-bar"><div class="toast-bar-fill"></div></div>`;
+    container.appendChild(el);
+    requestAnimationFrame(()=> el.classList.add('show'));
+    setTimeout(()=>{
+      el.classList.remove('show');
+      setTimeout(()=> el.remove(), 400);
+    }, 3700);
+  }
+
+  async function sendAlerts(email, sms){
+    showToast('이메일 전송 완료', email, 'email');
+    await sleep(650);
+    showToast('SMS 전송 완료', sms, 'sms');
+  }
+
+  function appendLogRow(panelId, time, html){
+    const panel = document.getElementById(panelId);
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    row.innerHTML = `<div class="log-time mono">${time}</div><div class="log-text">${html}</div>`;
+    panel.appendChild(row);
+    panel.scrollTop = panel.scrollHeight;
+  }
+
+  // ---- RCA auto-detect ----
+  let autoRCA = false, autoRCATimer = null;
+  function toggleAutoRCA(){
+    autoRCA = !autoRCA;
+    const btn = document.getElementById('rcaAutoBtn');
+    const badge = document.getElementById('rcaAutoBadge');
+    const hint = document.getElementById('rcaAutoHint');
+    if(autoRCA){
+      btn.textContent = '자동 감지 중지 ■';
+      btn.classList.add('auto-active');
+      badge.classList.add('on');
+      hint.style.display = 'block';
+      scheduleNextAutoRCA();
+    } else {
+      btn.textContent = '실시간 자동 감지 시작 ⏱';
+      btn.classList.remove('auto-active');
+      badge.classList.remove('on');
+      hint.style.display = 'none';
+      clearTimeout(autoRCATimer);
+    }
+  }
+  function scheduleNextAutoRCA(){
+    if(!autoRCA) return;
+    const delay = 6000 + Math.random()*5000;
+    autoRCATimer = setTimeout(async ()=>{
+      if(!rcaRunning){
+        if(Math.random() < AUTO_EVENT_PROB){
+          pickRandomRcaVariant();
+          const isNewIssue = willBeNewIssue('rca');
+          await runRCA(isNewIssue);
+          recordIssueAfterRun('rca');
+        } else {
+          showNormalCheck('rca');
+        }
+      }
+      scheduleNextAutoRCA();
+    }, delay);
+  }
+  function manualResetRCA(){
+    if(autoRCA) toggleAutoRCA();
+    clearTimeout(autoRCATimer);
+    rcaAutoDetectCount = 0;
+    rcaIssueHistory = [];
+    renderIssueTable('rca');
+    updateAutoDetectCounter('rca');
+    resetRCA();
+  }
+
+  // ---- PM auto-detect ----
+  let autoPM = false, autoPMTimer = null;
+  function toggleAutoPM(){
+    autoPM = !autoPM;
+    const btn = document.getElementById('pmAutoBtn');
+    const badge = document.getElementById('pmAutoBadge');
+    const hint = document.getElementById('pmAutoHint');
+    if(autoPM){
+      btn.textContent = '자동 감지 중지 ■';
+      btn.classList.add('auto-active');
+      badge.classList.add('on');
+      hint.style.display = 'block';
+      scheduleNextAutoPM();
+    } else {
+      btn.textContent = '실시간 자동 감지 시작 ⏱';
+      btn.classList.remove('auto-active');
+      badge.classList.remove('on');
+      hint.style.display = 'none';
+      clearTimeout(autoPMTimer);
+    }
+  }
+  function scheduleNextAutoPM(){
+    if(!autoPM) return;
+    const delay = 6000 + Math.random()*5000;
+    autoPMTimer = setTimeout(async ()=>{
+      if(!pmRunning){
+        if(Math.random() < AUTO_EVENT_PROB){
+          pickRandomPmVariant();
+          const isNewIssue = willBeNewIssue('pm');
+          await runPM(isNewIssue);
+          recordIssueAfterRun('pm');
+        } else {
+          showNormalCheck('pm');
+        }
+      }
+      scheduleNextAutoPM();
+    }, delay);
+  }
+  function manualResetPM(){
+    if(autoPM) toggleAutoPM();
+    clearTimeout(autoPMTimer);
+    pmAutoDetectCount = 0;
+    pmIssueHistory = [];
+    renderIssueTable('pm');
+    updateAutoDetectCounter('pm');
+    resetPM();
+  }
+
+  // ---- Auto-detect: normal-check (no-event) tick ----
+  const AUTO_EVENT_PROB = 0.3;
+  function ensureLogReady(panelId){
+    const panel = document.getElementById(panelId);
+    if(panel.querySelector('.log-empty')) panel.innerHTML = '';
+  }
+  function showNormalCheck(kind){
+    const now = new Date().toTimeString().slice(0,8);
+    if(kind === 'rca'){
+      ensureLogReady('rcaLogPanel');
+      document.getElementById('rcaStepIndicator').textContent = 'CHECKING · NORMAL';
+      appendLogRow('rcaLogPanel', now, '<span class="k">[CHECK]</span> 정상 — 이상 없음 (자동 점검)');
+      setTimeout(()=>{
+        if(document.getElementById('rcaStepIndicator').textContent === 'CHECKING · NORMAL'){
+          document.getElementById('rcaStepIndicator').textContent = 'STANDBY';
+        }
+      }, 1800);
+    } else {
+      ensureLogReady('pmLogPanel');
+      document.getElementById('pmStepIndicator').textContent = 'CHECKING · NORMAL';
+      appendLogRow('pmLogPanel', now, '<span class="k">[CHECK]</span> 정상 — 이상 없음 (자동 점검)');
+      setTimeout(()=>{
+        if(document.getElementById('pmStepIndicator').textContent === 'CHECKING · NORMAL'){
+          document.getElementById('pmStepIndicator').textContent = 'STANDBY';
+        }
+      }, 1800);
+    }
+  }
+
+  // ---- Issue history: dedupe by issue type, live counter, detail modal ----
+  let rcaAutoDetectCount = 0, pmAutoDetectCount = 0;
+  let rcaIssueHistory = [], pmIssueHistory = [];
+  function updateAutoDetectCounter(kind){
+    const el = document.getElementById(kind + 'AutoCountLabel');
+    if(!el) return;
+    const n = kind === 'rca' ? rcaAutoDetectCount : pmAutoDetectCount;
+    el.textContent = '자동감지 ' + n + '건';
+  }
+
+  function willBeNewIssue(kind){
+    let title;
+    if(kind === 'rca'){ title = currentRcaScenario.marker.replace('\u26a0', '').trim(); }
+    else { title = currentPmScenario.title; }
+    const history = kind === 'rca' ? rcaIssueHistory : pmIssueHistory;
+    return !(history.length > 0 && history[0].title === title);
+  }
+
+  function recordIssueAfterRun(kind){
+    const now = new Date().toTimeString().slice(0,8);
+    const logPanelId = kind === 'rca' ? 'rcaLogPanel' : 'pmLogPanel';
+    const logTime = kind === 'rca' ? now : 'D-0';
+    let title, causes, llmFull;
+    if(kind === 'rca'){
+      title = currentRcaScenario.marker.replace('\u26a0', '').trim();
+      causes = currentRcaScenario.causes;
+      llmFull = currentRcaScenario.llmFull;
+    } else {
+      title = currentPmScenario.title;
+      causes = currentPmScenario.causes;
+      llmFull = currentPmScenario.llmFull;
+    }
+    const history = kind === 'rca' ? rcaIssueHistory : pmIssueHistory;
+
+    if(history.length > 0 && history[0].title === title){
+      // Same issue as the most recent one — don't add a new row, just record another occurrence time
+      history[0].times.push(now);
+      history[0].isNew = true;
+      appendLogRow(logPanelId, logTime, '<span class="k">[LIST]</span> 동일 이슈 재확인');
+      renderIssueTable(kind);
+      return;
+    }
+
+    const issue = { title, causes, llmFull, times: [now], isNew: true, topCause: causes[0].name, topPct: causes[0].pct };
+    history.unshift(issue);
+    if(kind === 'rca'){ rcaAutoDetectCount++; } else { pmAutoDetectCount++; }
+    updateAutoDetectCounter(kind);
+    appendLogRow(logPanelId, logTime, '<span class="k">[LIST]</span> 신규 이슈 감지 → 리스트에 기록');
+    renderIssueTable(kind);
+  }
+
+  function renderIssueTable(kind){
+    const list = kind === 'rca' ? rcaIssueHistory : pmIssueHistory;
+    const tbody = document.getElementById(kind + 'IssueTable');
+    if(!tbody) return;
+    if(list.length === 0){
+      tbody.innerHTML = '<tr><td colspan="4" class="issue-empty">아직 기록된 이슈가 없습니다.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map((it, i) => `
+      <tr class="issue-row" onclick="openIssueModalFor('${kind}',${i})">
+        <td class="issue-dot-cell">${it.isNew ? '<span class="issue-new-dot"></span>' : ''}</td>
+        <td class="mono">${it.times[it.times.length-1]}</td>
+        <td>${it.title}${it.times.length > 1 ? ' <span class="mono" style="color:var(--text-dim);">\u00d7' + it.times.length + '</span>' : ''}</td>
+        <td>${it.topCause} (${it.topPct}%)</td>
+      </tr>`).join('');
+  }
+
+  function openIssueModalFor(kind, idx){
+    const list = kind === 'rca' ? rcaIssueHistory : pmIssueHistory;
+    const it = list[idx];
+    if(!it) return;
+    it.isNew = false;
+    renderIssueTable(kind);
+    document.getElementById('issueModalTitle').textContent = it.title;
+    document.getElementById('issueModalTime').innerHTML = it.times.length > 1
+      ? '발생 시각 (' + it.times.length + '건): ' + it.times.slice().reverse().map(t=>'<span class="mono">'+t+'</span>').join(' · ')
+      : '발생 시각: <span class="mono">' + it.times[0] + '</span>';
+    document.getElementById('issueModalCauses').innerHTML = it.causes.map(c => `
+      <div class="cause-row">
+        <div class="cause-head"><span class="cause-name">${c.name}</span><span class="cause-pct mono">${c.pct}%</span></div>
+        <div class="cause-bar-track"><div class="cause-bar-fill" style="width:${c.pct}%;background:linear-gradient(90deg,#FF5C5C,#F5A524);"></div></div>
+      </div>`).join('');
+    document.getElementById('issueModalLLM').textContent = it.llmFull;
+    document.getElementById('issueModalOverlay').classList.add('show');
+  }
+  function closeIssueModal(){
+    document.getElementById('issueModalOverlay').classList.remove('show');
+  }
+
+
+  // ================= PROCESS / LINE REGISTRY =================
+  const PROCESS_LINES = {"ingot": ["01", "02"], "wafer": ["01", "02"], "cell": ["01", "02", "03", "04", "05", "06"], "module": ["01", "02"]};
+  const PROCESS_LABELS = {"ingot": "INGOT", "wafer": "WAFER", "cell": "CELL", "module": "MODULE"};
+  const OEE_PERIOD_DATA = {"shift": {"ingot": {"oee": 89, "alarms": 0}, "wafer": {"oee": 90, "alarms": 1}, "cell": {"oee": 74, "alarms": 2}, "module": {"oee": 93, "alarms": 0}}, "daily": {"ingot": {"oee": 91, "alarms": 0}, "wafer": {"oee": 87, "alarms": 1}, "cell": {"oee": 82, "alarms": 3}, "module": {"oee": 94, "alarms": 0}}, "weekly": {"ingot": {"oee": 90, "alarms": 2}, "wafer": {"oee": 88, "alarms": 6}, "cell": {"oee": 84, "alarms": 15}, "module": {"oee": 93, "alarms": 1}}, "monthly": {"ingot": {"oee": 90, "alarms": 8}, "wafer": {"oee": 89, "alarms": 22}, "cell": {"oee": 85, "alarms": 54}, "module": {"oee": 93, "alarms": 3}}};
+  const OEE_NOTES = {"shift": "현재 교대조 동안의 누적 실적입니다. 표본이 짧아 변동성이 큽니다.", "daily": "당일(00:00~현재) 누적 실적입니다.", "weekly": "최근 7일 누적/평균 실적입니다. 알람 건수는 누적치라 기간이 길수록 커집니다.", "monthly": "최근 30일 누적/평균 실적입니다. 평균 OEE는 완만해지는 경향이 있습니다."};
+  const LINE_PERIOD_DATA = {"cell": {"shift": {"01": {"oee": 87, "defect": 1.5}, "02": {"oee": 89, "defect": 1.0}, "03": {"oee": 71, "defect": 5.0}, "04": {"oee": 83, "defect": 2.4}, "05": {"oee": 90, "defect": 0.7}, "06": {"oee": 88, "defect": 1.2}}, "daily": {"01": {"oee": 89, "defect": 1.2}, "02": {"oee": 91, "defect": 0.8}, "03": {"oee": 78, "defect": 4.1}, "04": {"oee": 85, "defect": 2.0}, "05": {"oee": 92, "defect": 0.6}, "06": {"oee": 90, "defect": 1.0}}, "weekly": {"01": {"oee": 88, "defect": 2.0}, "02": {"oee": 90, "defect": 1.5}, "03": {"oee": 80, "defect": 9.0}, "04": {"oee": 86, "defect": 3.5}, "05": {"oee": 91, "defect": 1.1}, "06": {"oee": 89, "defect": 1.8}}, "monthly": {"01": {"oee": 88, "defect": 3.0}, "02": {"oee": 90, "defect": 2.2}, "03": {"oee": 81, "defect": 14.0}, "04": {"oee": 86, "defect": 5.0}, "05": {"oee": 91, "defect": 1.6}, "06": {"oee": 89, "defect": 2.6}}}, "ingot": {"shift": {"01": {"oee": 92, "defect": 0.5}, "02": {"oee": 90, "defect": 0.8}}, "daily": {"01": {"oee": 93, "defect": 0.4}, "02": {"oee": 91, "defect": 0.6}}, "weekly": {"01": {"oee": 92, "defect": 0.9}, "02": {"oee": 90, "defect": 1.4}}, "monthly": {"01": {"oee": 92, "defect": 1.3}, "02": {"oee": 90, "defect": 2.0}}}, "wafer": {"shift": {"01": {"oee": 89, "defect": 1.0}, "02": {"oee": 86, "defect": 1.6}}, "daily": {"01": {"oee": 90, "defect": 0.9}, "02": {"oee": 87, "defect": 1.3}}, "weekly": {"01": {"oee": 89, "defect": 1.8}, "02": {"oee": 86, "defect": 2.5}}, "monthly": {"01": {"oee": 88, "defect": 2.6}, "02": {"oee": 85, "defect": 3.8}}}, "module": {"shift": {"01": {"oee": 95, "defect": 0.2}, "02": {"oee": 93, "defect": 0.4}}, "daily": {"01": {"oee": 95, "defect": 0.2}, "02": {"oee": 94, "defect": 0.3}}, "weekly": {"01": {"oee": 94, "defect": 0.5}, "02": {"oee": 93, "defect": 0.7}}, "monthly": {"01": {"oee": 94, "defect": 0.8}, "02": {"oee": 93, "defect": 1.1}}}};
+  const BADGE_LABELS = { live: 'LIVE MONITORING', aggregated: 'AGGREGATED VIEW' };
+  const TOAST_ADD_LINE_TITLE = '라인 추가 완료';
+  const HIST_FILTERED_TPL = '{n}건 검색됨';
+  const SCENARIO_DATA = {"ingot": {"stages": ["원료투입", "용융", "결정성장"], "marker": "⚠ 결정결함", "logSteps": [{"t": "09:14:02", "html": "<span class=\"k\">[EVENT]</span> 1번 잉곳 라인 결정 표면 결함 감지 · Product ID <b>IG-20260714-1042</b>"}, {"t": "09:14:03", "html": "<span class=\"k\">[FETCH]</span> 직전 30분 냉각속도·로온도·원료 로트 로그 조회"}, {"t": "09:14:05", "html": "<span class=\"k\">[AGG]</span> avg_cooling_rate=4.8°C/min · max=6.1°C/min · trend=+1.3"}, {"t": "09:14:11", "html": "<span class=\"k\">[MODEL]</span> RandomForest 추론 완료 → feature_importances_ 산출"}, {"t": "09:14:16", "html": "<span class=\"k\">[LLM]</span> Claude API 호출 → 자연어 설명 생성"}], "causes": [{"name": "성장로#1 냉각 속도 이상", "pct": 60, "color": "linear-gradient(90deg,#FF5C5C,#F5A524)"}, {"name": "원료 실리콘 순도 편차", "pct": 25, "color": "linear-gradient(90deg,#F5A524,#F5D024)"}, {"name": "야간 교대조 요인", "pct": 15, "color": "linear-gradient(90deg,#7C8AAE,#B7C2DE)"}], "llmFull": "09:14에 1번 잉곳 라인에서 결정결함이 발생했습니다. 분석 결과, 결함 발생 직전 30분간 성장로#1의 냉각 속도가 평소보다 빠르게 변동한 것이 가장 유력한 원인(60%)으로 보입니다. 원료 실리콘 순도 편차도 25% 확률로 연관이 있을 수 있습니다. 성장로#1의 냉각 제어 상태를 우선 점검해보시길 권장합니다.", "notifyTime": "09:14:20", "email": "shift-lead@qcells.com", "sms": "010-****-5521"}, "wafer": {"stages": ["잉곳로딩", "절단", "세정"], "marker": "⚠ 두께 편차", "logSteps": [{"t": "11:02:07", "html": "<span class=\"k\">[EVENT]</span> 1번 웨이퍼 라인 두께 편차 감지 · Product ID <b>WF2-20260714-2231</b>"}, {"t": "11:02:08", "html": "<span class=\"k\">[FETCH]</span> 직전 30분 와이어쏘 장력·절단각도·세정공정 로그 조회"}, {"t": "11:02:10", "html": "<span class=\"k\">[AGG]</span> avg_tension=112N · max=128N · trend=+9.5"}, {"t": "11:02:16", "html": "<span class=\"k\">[MODEL]</span> RandomForest 추론 완료 → feature_importances_ 산출"}, {"t": "11:02:21", "html": "<span class=\"k\">[LLM]</span> Claude API 호출 → 자연어 설명 생성"}], "causes": [{"name": "와이어쏘 장력 이상", "pct": 58, "color": "linear-gradient(90deg,#FF5C5C,#F5A524)"}, {"name": "절단 각도 편차", "pct": 22, "color": "linear-gradient(90deg,#F5A524,#F5D024)"}, {"name": "세정 공정 잔류물", "pct": 20, "color": "linear-gradient(90deg,#7C8AAE,#B7C2DE)"}], "llmFull": "11:02에 1번 웨이퍼 라인에서 두께 편차가 발생했습니다. 분석 결과, 발생 직전 30분간 와이어쏘 장력이 112N에서 128N까지 상승한 것이 가장 유력한 원인(58%)으로 보입니다. 절단 각도 편차도 22% 확률로 연관이 있을 수 있습니다. 와이어쏘 장력 제어 상태를 우선 점검해보시길 권장합니다.", "notifyTime": "11:02:25", "email": "shift-lead@qcells.com", "sms": "010-****-5521"}, "cell": {"stages": ["투입", "열처리기#3", "검사장비"], "marker": "⚠ MICROCRACK", "logSteps": [{"t": "14:32:07", "html": "<span class=\"k\">[EVENT]</span> 3번 셀 라인 표면 미세균열 감지 · Product ID <b>WF-20260714-3891</b>"}, {"t": "14:32:08", "html": "<span class=\"k\">[FETCH]</span> 직전 30분 온도·압력·설비·원자재 로트 로그 조회"}, {"t": "14:32:09", "html": "<span class=\"k\">[AGG]</span> avg_temp=88.4 · max_temp=93.0 · temp_trend=+11.0"}, {"t": "14:32:15", "html": "<span class=\"k\">[MODEL]</span> RandomForest 추론 완료 → feature_importances_ 산출"}, {"t": "14:32:20", "html": "<span class=\"k\">[LLM]</span> Claude API 호출 → 자연어 설명 생성"}], "causes": [{"name": "열처리기#3 온도 이상 (82→93℃ 상승)", "pct": 65, "color": "linear-gradient(90deg,#FF5C5C,#F5A524)"}, {"name": "원자재 로트 A-2291", "pct": 20, "color": "linear-gradient(90deg,#F5A524,#F5D024)"}, {"name": "오후 교대조 요인", "pct": 15, "color": "linear-gradient(90deg,#7C8AAE,#B7C2DE)"}], "llmFull": "14:32에 3번 라인에서 미세균열 불량이 발생했습니다. 분석 결과, 불량 발생 직전 30분간 열처리기#3의 온도가 82도에서 93도까지 지속적으로 상승한 것이 가장 유력한 원인(65%)으로 보입니다. 참고로 사용된 원자재 로트(A-2291)도 20% 확률로 연관이 있을 수 있습니다. 열처리기#3의 온도 제어 상태를 우선 점검해보시길 권장합니다.", "notifyTime": "14:32:24", "email": "shift-lead@qcells.com", "sms": "010-****-5521"}, "module": {"stages": ["셀정렬", "라미네이션", "프레이밍"], "marker": "⚠ 실링 불량", "logSteps": [{"t": "15:47:03", "html": "<span class=\"k\">[EVENT]</span> 1번 모듈 라인 실링 불량 감지 · Product ID <b>MD-20260714-0587</b>"}, {"t": "15:47:04", "html": "<span class=\"k\">[FETCH]</span> 직전 30분 라미네이터 온도·EVA 로트·압착압력 로그 조회"}, {"t": "15:47:06", "html": "<span class=\"k\">[AGG]</span> avg_temp=148°C · max_temp=156°C · trend=+6.2"}, {"t": "15:47:12", "html": "<span class=\"k\">[MODEL]</span> RandomForest 추론 완료 → feature_importances_ 산출"}, {"t": "15:47:17", "html": "<span class=\"k\">[LLM]</span> Claude API 호출 → 자연어 설명 생성"}], "causes": [{"name": "라미네이터#2 온도 편차", "pct": 63, "color": "linear-gradient(90deg,#FF5C5C,#F5A524)"}, {"name": "EVA 필름 로트 이상", "pct": 19, "color": "linear-gradient(90deg,#F5A524,#F5D024)"}, {"name": "프레임 압착 압력 편차", "pct": 18, "color": "linear-gradient(90deg,#7C8AAE,#B7C2DE)"}], "llmFull": "15:47에 1번 모듈 라인에서 실링 불량이 발생했습니다. 분석 결과, 발생 직전 30분간 라미네이터#2의 온도가 148도에서 156도까지 상승한 것이 가장 유력한 원인(63%)으로 보입니다. EVA 필름 로트 이상도 19% 확률로 연관이 있을 수 있습니다. 라미네이터#2의 온도 제어 상태를 우선 점검해보시길 권장합니다.", "notifyTime": "15:47:21", "email": "shift-lead@qcells.com", "sms": "010-****-5521"}};
+  const SCENARIO_DATA_ALT = {"ingot": {"marker": "⚠ 기공결함", "logSteps": [{"t": "09:47:11", "html": "<span class=\"k\">[EVENT]</span> 1번 잉곳 라인 기공 결함 감지 · Product ID <b>IG-20260714-1088</b>"}, {"t": "09:47:12", "html": "<span class=\"k\">[FETCH]</span> 직전 30분 도가니 회전속도·진공도·원료 수분 로그 조회"}, {"t": "09:47:14", "html": "<span class=\"k\">[AGG]</span> avg_vacuum=0.82torr · rotation_var=+18% · trend=unstable"}, {"t": "09:47:19", "html": "<span class=\"k\">[MODEL]</span> RandomForest 추론 완료 → feature_importances_ 산출"}, {"t": "09:47:24", "html": "<span class=\"k\">[LLM]</span> Claude API 호출 → 자연어 설명 생성"}], "causes": [{"name": "도가니 회전속도 이상", "pct": 55, "color": "linear-gradient(90deg,#FF5C5C,#F5A524)"}, {"name": "용융 진공도 편차", "pct": 28, "color": "linear-gradient(90deg,#F5A524,#F5D024)"}, {"name": "원료 로트 수분 함량", "pct": 17, "color": "linear-gradient(90deg,#7C8AAE,#B7C2DE)"}], "llmFull": "09:47에 1번 잉곳 라인에서 기공결함이 발생했습니다. 분석 결과, 결함 발생 직전 30분간 도가니 회전속도가 불안정하게 변동한 것이 가장 유력한 원인(55%)으로 보입니다. 용융 진공도 편차도 28% 확률로 연관이 있을 수 있습니다. 도가니 회전 제어 상태를 우선 점검해보시길 권장합니다.", "notifyTime": "09:47:28", "email": "shift-lead@qcells.com", "sms": "010-****-5521"}, "wafer": {"marker": "⚠ 표면 스크래치", "logSteps": [{"t": "11:35:02", "html": "<span class=\"k\">[EVENT]</span> 1번 웨이퍼 라인 표면 스크래치 감지 · Product ID <b>WF2-20260714-2299</b>"}, {"t": "11:35:03", "html": "<span class=\"k\">[FETCH]</span> 직전 30분 세정롤러 마모도·이송벨트·절단 잔사 로그 조회"}, {"t": "11:35:05", "html": "<span class=\"k\">[AGG]</span> roller_wear=68% · belt_particle_count=+14 · trend=+8.0"}, {"t": "11:35:10", "html": "<span class=\"k\">[MODEL]</span> RandomForest 추론 완료 → feature_importances_ 산출"}, {"t": "11:35:15", "html": "<span class=\"k\">[LLM]</span> Claude API 호출 → 자연어 설명 생성"}], "causes": [{"name": "세정롤러 마모", "pct": 52, "color": "linear-gradient(90deg,#FF5C5C,#F5A524)"}, {"name": "이송벨트 이물질", "pct": 26, "color": "linear-gradient(90deg,#F5A524,#F5D024)"}, {"name": "절단 잔사 잔류", "pct": 22, "color": "linear-gradient(90deg,#7C8AAE,#B7C2DE)"}], "llmFull": "11:35에 1번 웨이퍼 라인에서 표면 스크래치가 발생했습니다. 분석 결과, 발생 직전 30분간 세정롤러 마모도가 68%까지 상승한 것이 가장 유력한 원인(52%)으로 보입니다. 이송벨트 이물질도 26% 확률로 연관이 있을 수 있습니다. 세정롤러 교체 상태를 우선 점검해보시길 권장합니다.", "notifyTime": "11:35:19", "email": "shift-lead@qcells.com", "sms": "010-****-5521"}, "cell": {"marker": "⚠ 색상 불균일", "logSteps": [{"t": "15:03:07", "html": "<span class=\"k\">[EVENT]</span> 3번 셀 라인 색상 불균일 감지 · Product ID <b>WF-20260714-3940</b>"}, {"t": "15:03:08", "html": "<span class=\"k\">[FETCH]</span> 직전 30분 확산로#2 온도·화학용액 농도·컨베이어 속도 로그 조회"}, {"t": "15:03:10", "html": "<span class=\"k\">[AGG]</span> avg_temp=642°C · max_temp=658°C · trend=+9.2"}, {"t": "15:03:16", "html": "<span class=\"k\">[MODEL]</span> RandomForest 추론 완료 → feature_importances_ 산출"}, {"t": "15:03:21", "html": "<span class=\"k\">[LLM]</span> Claude API 호출 → 자연어 설명 생성"}], "causes": [{"name": "확산로#2 온도 편차", "pct": 57, "color": "linear-gradient(90deg,#FF5C5C,#F5A524)"}, {"name": "화학용액 농도 이상", "pct": 24, "color": "linear-gradient(90deg,#F5A524,#F5D024)"}, {"name": "컨베이어 속도 편차", "pct": 19, "color": "linear-gradient(90deg,#7C8AAE,#B7C2DE)"}], "llmFull": "15:03에 3번 셀 라인에서 색상 불균일이 발생했습니다. 분석 결과, 발생 직전 30분간 확산로#2의 온도가 642도에서 658도까지 상승한 것이 가장 유력한 원인(57%)으로 보입니다. 화학용액 농도 이상도 24% 확률로 연관이 있을 수 있습니다. 확산로#2의 온도 제어 상태를 우선 점검해보시길 권장합니다.", "notifyTime": "15:03:25", "email": "shift-lead@qcells.com", "sms": "010-****-5521"}, "module": {"marker": "⚠ 배선 접촉불량", "logSteps": [{"t": "16:21:04", "html": "<span class=\"k\">[EVENT]</span> 1번 모듈 라인 배선 접촉불량 감지 · Product ID <b>MD-20260714-0612</b>"}, {"t": "16:21:05", "html": "<span class=\"k\">[FETCH]</span> 직전 30분 솔더링 온도·커넥터 로트·프레스 압력 로그 조회"}, {"t": "16:21:07", "html": "<span class=\"k\">[AGG]</span> avg_solder_temp=228°C · max=241°C · trend=+7.4"}, {"t": "16:21:13", "html": "<span class=\"k\">[MODEL]</span> RandomForest 추론 완료 → feature_importances_ 산출"}, {"t": "16:21:18", "html": "<span class=\"k\">[LLM]</span> Claude API 호출 → 자연어 설명 생성"}], "causes": [{"name": "솔더링 온도 편차", "pct": 61, "color": "linear-gradient(90deg,#FF5C5C,#F5A524)"}, {"name": "커넥터 로트 이상", "pct": 21, "color": "linear-gradient(90deg,#F5A524,#F5D024)"}, {"name": "프레스 압력 편차", "pct": 18, "color": "linear-gradient(90deg,#7C8AAE,#B7C2DE)"}], "llmFull": "16:21에 1번 모듈 라인에서 배선 접촉불량이 발생했습니다. 분석 결과, 발생 직전 30분간 솔더링 온도가 228도에서 241도까지 상승한 것이 가장 유력한 원인(61%)으로 보입니다. 커넥터 로트 이상도 21% 확률로 연관이 있을 수 있습니다. 솔더링 온도 제어 상태를 우선 점검해보시길 권장합니다.", "notifyTime": "16:21:22", "email": "shift-lead@qcells.com", "sms": "010-****-5521"}};
+  const PM_VARIANT_ALT = {"title": "열처리기#3 베어링 마모 징후", "score": "0.65 / 1.0", "trend": "2일간 진동 패턴 불안정", "prob": "54%", "action": "베어링 윤활 상태 점검", "logSteps": [{"t": "D-4~D-2", "html": "<span class=\"k\">[BASELINE]</span> 진동 파형 규칙적 — 정상 범위"}, {"t": "D-2~D-1", "html": "<span class=\"k\">[DRIFT]</span> 진동 파형 불규칙 패턴 시작 — 주파수 성분 변화 감지"}, {"t": "D-1", "html": "<span class=\"k\">[ANOMALY]</span> Isolation Forest 이상 점수 임계치 초과 감지"}, {"t": "D-0", "html": "<span class=\"k\">[FORECAST]</span> 72시간 내 고장 확률 54% 산출, LLM 경보 생성"}], "llmFull": "열처리기#3 베어링 부위에서 비정상적인 진동 패턴이 2일간 감지되었으며, 고장 확률 54%로 추정됩니다(72시간 내). 정상 마모 곡선과 다른 불규칙한 진동 주파수가 확인되어, 베어링 윤활 상태를 우선 점검해보시길 권장합니다.", "causes": [{"name": "베어링 마모로 인한 불규칙 진동 패턴", "pct": 54}]};
+  const REPRESENTATIVE_LINE = {"ingot": "01", "wafer": "01", "cell": "03", "module": "01"};
+  const LINE_HINT_TPL = '이 라인은 대표 시나리오가 아닙니다 — {proc} 공정 데모는 Line {rep} 기준입니다.';
+  let currentOeePeriod = 'daily';
+  let currentView = 'factory';
+  let currentProcess = 'cell';
+  let currentLineNum = '03';
+
+  function statusForOee(oee){
+    if(oee >= 90) return 'ok';
+    if(oee >= 83) return 'warn';
+    return 'danger';
+  }
+  function gradForStatus(status){
+    if(status === 'ok') return 'linear-gradient(90deg,#22D9B6,#159C82)';
+    if(status === 'warn') return 'linear-gradient(90deg,#F5A524,#D9861A)';
+    return 'linear-gradient(90deg,#FF5C5C,#F5A524)';
+  }
+
+  function updateSysSub(){
+    const el = document.getElementById('sysSub');
+    if(!el) return;
+    const label = PROCESS_LABELS[currentProcess];
+    el.textContent = label + ' LINE ' + currentLineNum + ' — Ingot / Wafer / Cell / Module';
+  }
+
+  function renderFactory(period){
+    const data = OEE_PERIOD_DATA[period];
+    ['ingot','wafer','cell','module'].forEach(key=>{
+      const d = data[key];
+      const status = statusForOee(d.oee);
+      document.getElementById('oee-'+key).textContent = d.oee;
+      document.getElementById('gauge-'+key).style.width = d.oee + '%';
+      document.getElementById('gauge-'+key).style.background = gradForStatus(status);
+      document.getElementById('dot-'+key).className = 'status-dot ' + status;
+      document.getElementById('alarms-'+key).textContent = d.alarms;
+    });
+    document.getElementById('oeeNote').textContent = OEE_NOTES[period];
+  }
+
+  function lineCardHTML(proc, num){
+    return `<div class="line-card" id="linecard-${num}" onclick="goToLineDetail(&apos;${proc}&apos;,&apos;${num}&apos;)">`
+      + `<div class="line-card-head"><span>LINE ${num}</span><span class="status-dot ok" id="linedot-${num}"></span></div>`
+      + `<div class="line-card-sub">가동률 <span id="lineoee-${num}">—</span>% · 불량률 <span id="linedefect-${num}">—</span>%</div>`
+      + `</div>`;
+  }
+
+  function renderFleet(){
+    const proc = document.getElementById('processSelect').value;
+    currentProcess = proc;
+    hideAddLineForm();
+    const grid = document.getElementById('fleetGrid');
+    const note = document.getElementById('fleetNote');
+    const nums = PROCESS_LINES[proc];
+    grid.innerHTML = nums.map(n => lineCardHTML(proc, n)).join('');
+    grid.style.display = 'grid';
+    note.style.display = 'none';
+    renderFleetLines(currentOeePeriod);
+  }
+
+  function renderFleetLines(period){
+    const proc = document.getElementById('processSelect') ? document.getElementById('processSelect').value : currentProcess;
+    const data = LINE_PERIOD_DATA[proc][period];
+    (PROCESS_LINES[proc] || []).forEach(num=>{
+      const d = data[num];
+      if(!d) return;
+      const status = statusForOee(d.oee);
+      const oeeEl = document.getElementById('lineoee-'+num);
+      const defEl = document.getElementById('linedefect-'+num);
+      const dotEl = document.getElementById('linedot-'+num);
+      const card = document.getElementById('linecard-'+num);
+      if(!oeeEl) return;
+      oeeEl.textContent = d.oee;
+      defEl.textContent = d.defect;
+      dotEl.className = 'status-dot ' + status;
+      card.classList.remove('danger','warn');
+      if(status !== 'ok') card.classList.add(status);
+    });
+  }
+
+  function setOeePeriod(period){
+    currentOeePeriod = period;
+    document.querySelectorAll('#oeePeriodTabs .filter-tab, #fleetPeriodTabs .filter-tab').forEach(b=>{
+      b.classList.toggle('active', b.dataset.period === period);
+    });
+    renderFactory(period);
+    renderFleetLines(period);
+    updateBadge();
+  }
+
+  function updateBadge(){
+    const badge = document.getElementById('liveBadge');
+    let state = 'live';
+    if(currentView === 'factory' || currentView === 'fleet'){
+      state = (currentOeePeriod === 'shift' || currentOeePeriod === 'daily') ? 'live' : 'aggregated';
+    } else if(currentView === 'history'){
+      state = 'aggregated';
+    } else {
+      state = 'live';
+    }
+    badge.textContent = BADGE_LABELS[state];
+    badge.className = 'badge ' + state;
+  }
+
+  // ================= ADD LINE (fleet setup) =================
+  function showAddLineForm(){
+    document.getElementById('addLineForm').classList.add('show');
+    document.getElementById('addLineNumInput').value = '';
+    document.getElementById('addLineNumInput').focus();
+  }
+  function hideAddLineForm(){
+    document.getElementById('addLineForm').classList.remove('show');
+  }
+  function confirmAddLine(){
+    const input = document.getElementById('addLineNumInput');
+    let num = input.value.trim();
+    if(!num) return;
+    num = num.padStart(2, '0');
+    const proc = document.getElementById('processSelect').value;
+    if(!PROCESS_LINES[proc].includes(num)) PROCESS_LINES[proc].push(num);
+    ['shift','daily','weekly','monthly'].forEach(p=>{
+      if(!LINE_PERIOD_DATA[proc][p][num]) LINE_PERIOD_DATA[proc][p][num] = { oee: 90, defect: 1.0 };
+    });
+    hideAddLineForm();
+    renderFleet();
+    showToast(TOAST_ADD_LINE_TITLE, PROCESS_LABELS[proc] + ' LINE ' + num, 'info');
+  }
+
+  // ================= VIEW NAVIGATION (6-level MES hierarchy) =================
+  function switchView(name){
+    currentView = name;
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+name).classList.add('active');
+    document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('navBtn-'+name).classList.add('active');
+    updateBadge();
+  }
+
+  function goToFleet(process){
+    document.getElementById('processSelect').value = process;
+    renderFleet();
+    switchView('fleet');
+  }
+
+  function rebuildLineSelect(proc, selectedNum){
+    const sel = document.getElementById('lineSelect');
+    const nums = PROCESS_LINES[proc];
+    sel.innerHTML = nums.map(n => '<option value="'+n+'"'+(n===selectedNum?' selected':'')+'>Line '+n+'</option>').join('');
+    document.getElementById('lineProcessSelect').value = proc;
+  }
+
+  function loadRcaScenario(proc){
+    const sc = SCENARIO_DATA[proc];
+    currentRcaScenario = sc;
+    ['1','2','3'].forEach((n,i)=>{
+      document.getElementById('rcaLabel'+n).textContent = sc.stages[i];
+    });
+    document.getElementById('rcaMarker').textContent = sc.marker;
+    rcaAutoDetectCount = 0;
+    rcaIssueHistory = [];
+    if(document.getElementById('rcaIssueTable')) renderIssueTable('rca');
+    if(document.getElementById('rcaAutoCountLabel')) updateAutoDetectCounter('rca');
+    resetRCA();
+  }
+
+  function pickRandomRcaVariant(){
+    const proc = currentProcess;
+    const alt = SCENARIO_DATA_ALT[proc];
+    currentRcaScenario = (Math.random() < 0.5) ? SCENARIO_DATA[proc] : alt;
+    document.getElementById('rcaMarker').textContent = currentRcaScenario.marker;
+  }
+
+  function onLineProcessChange(){
+    const proc = document.getElementById('lineProcessSelect').value;
+    currentProcess = proc;
+    document.getElementById('processSelect').value = proc;
+    const rep = REPRESENTATIVE_LINE[proc];
+    currentLineNum = rep;
+    rebuildLineSelect(proc, rep);
+    loadRcaScenario(proc);
+    onLineSelectChange();
+    updateSysSub();
+  }
+
+  function goToLineDetail(proc, lineNo){
+    currentProcess = proc;
+    currentLineNum = lineNo;
+    document.getElementById('processSelect').value = proc;
+    rebuildLineSelect(proc, lineNo);
+    loadRcaScenario(proc);
+    onLineSelectChange();
+    updateSysSub();
+    switchView('line');
+  }
+
+  function onLineSelectChange(){
+    const val = document.getElementById('lineSelect').value;
+    currentLineNum = val;
+    updateSysSub();
+    const rep = REPRESENTATIVE_LINE[currentProcess];
+    const hint = document.getElementById('lineSelectHint');
+    if(val === rep){
+      hint.style.display = 'none';
+    } else {
+      hint.textContent = LINE_HINT_TPL.replace('{proc}', PROCESS_LABELS[currentProcess]).replace('{rep}', rep);
+      hint.style.display = 'block';
+    }
+  }
+
+  // ---- Equipment view ----
+  const EQUIP_DATA = {"heater": {"name": "열처리기#3", "uptime": "482h", "lastMaint": "2026-06-18", "nextMaint": "2026-08-02", "rul": "약 14일", "rows": [["2026-06-18", "정기점검", "김민수", "온도 센서 캘리브레이션"], ["2026-05-02", "부품교체", "이서연", "팬 모터 교체"], ["2026-03-20", "정기점검", "박준영", "이상 없음"]]}, "inspector": {"name": "검사장비", "uptime": "901h", "lastMaint": "2026-07-01", "nextMaint": "2026-09-15", "rul": "약 60일+", "rows": [["2026-07-01", "정기점검", "이서연", "카메라 렌즈 클리닝"], ["2026-04-11", "소프트웨어 업데이트", "박준영", "검사 알고리즘 v2.3 적용"]]}, "conveyor": {"name": "투입 컨베이어", "uptime": "1204h", "lastMaint": "2026-05-28", "nextMaint": "2026-08-28", "rul": "약 30일", "rows": [["2026-05-28", "정기점검", "김민수", "밵트 장력 조정"]]}, "growth_furnace": {"name": "성장로#1", "uptime": "623h", "lastMaint": "2026-06-05", "nextMaint": "2026-08-20", "rul": "약 21일", "rows": [["2026-06-05", "정기점검", "김민수", "도가니 회전축 점검"], ["2026-04-14", "부품교체", "박준영", "냉각 코일 교체"]]}, "wire_saw": {"name": "와이어쏘", "uptime": "812h", "lastMaint": "2026-06-22", "nextMaint": "2026-08-10", "rul": "약 18일", "rows": [["2026-06-22", "정기점검", "이서연", "와이어 장력 재조정"], ["2026-05-15", "부품교체", "김민수", "와이어 릴 교체"]]}, "laminator": {"name": "라미네이터#2", "uptime": "945h", "lastMaint": "2026-06-10", "nextMaint": "2026-08-15", "rul": "약 25일", "rows": [["2026-06-10", "정기점검", "박준영", "히터 온도 센서 점검"], ["2026-04-28", "소프트웨어 업데이트", "이서연", "온도 제어 로직 v1.4 적용"]]}};
+  const EQUIP_CHART_DATA = {"heater": {"24h": {"y": [95.0, 92.0, 89.0, 86.0, 83.0, 80.0], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524", "#F5A524"]}, "7d": {"y": [150, 140, 145, 120, 110, 95, 80], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524"]}, "30d": {"y": [154.5, 132.5, 115.0, 97.5, 80], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524"]}}, "inspector": {"24h": {"y": [148.0, 148.4, 148.8, 149.2, 149.6, 150.0], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6"]}, "7d": {"y": [148, 150, 147, 151, 149, 148, 150], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6"]}, "30d": {"y": [152.4, 148.5, 149.0, 149.5, 150], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6"]}}, "conveyor": {"24h": {"y": [143.0, 142.0, 141.0, 140.0, 139.0, 138.0], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524", "#F5A524"]}, "7d": {"y": [170, 165, 158, 152, 148, 143, 138], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524", "#F5A524"]}, "30d": {"y": [175.1, 162.0, 154.0, 146.0, 138], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524"]}}, "growth_furnace": {"24h": {"y": [102.0, 98.6, 95.2, 91.8, 88.4, 85.0], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524", "#F5A524"]}, "7d": {"y": [140, 138, 142, 125, 118, 102, 85], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524"]}, "30d": {"y": [144.2, 126.2, 112.5, 98.8, 85], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524"]}}, "wire_saw": {"24h": {"y": [135.0, 132.0, 129.0, 126.0, 123.0, 120.0], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524", "#F5A524"]}, "7d": {"y": [168, 165, 170, 158, 148, 135, 120], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524"]}, "30d": {"y": [173.0, 156.0, 144.0, 132.0, 120], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524"]}}, "laminator": {"24h": {"y": [105.0, 101.6, 98.2, 94.8, 91.4, 88.0], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524", "#F5A524"]}, "7d": {"y": [150, 145, 148, 130, 120, 105, 88], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524"]}, "30d": {"y": [154.5, 134.5, 119.0, 103.5, 88], "colors": ["#22D9B6", "#22D9B6", "#22D9B6", "#F5A524", "#F5A524"]}}};
+  const PROCESS_EQUIPMENT_MAP = {"CELL": [["heater", "열처리기#3"], ["inspector", "검사장비"], ["conveyor", "투입 컨베이어"]], "INGOT": [["growth_furnace", "성장로#1"]], "WAFER": [["wire_saw", "와이어쏘"]], "MODULE": [["laminator", "라미네이터#2"]]};
+  const EQUIP_PERIOD_LABELS = {"24h": ["00시", "04시", "08시", "12시", "16시", "20시"], "7d": ["D-6", "D-5", "D-4", "D-3", "D-2", "D-1", "D-0"], "30d": ["4주 전", "3주 전", "2주 전", "1주 전", "현재"]};
+  const EQUIP_TREND_TITLE_TPL = '{period} 진동 센서 추이';
+  const EQUIP_PERIOD_NAME = {"24h": "24시간", "7d": "7일", "30d": "30일"};
+  let currentEquipPeriod = '7d';
+
+  function onEquipProcessChange(){
+    const proc = document.getElementById('equipProcessSelect').value;
+    const items = PROCESS_EQUIPMENT_MAP[proc];
+    const sel = document.getElementById('equipSelect');
+    sel.innerHTML = items.map((it,i)=> `<option value="${it[0]}"${i===0?' selected':''}>${it[1]}</option>`).join('');
+    renderEquipment();
+  }
+
+  function setEquipPeriod(period){
+    currentEquipPeriod = period;
+    document.querySelectorAll('#equipPeriodTabs .filter-tab').forEach(b=>{
+      b.classList.toggle('active', b.dataset.period === period);
+    });
+    renderEquipment();
+  }
+
+  function renderEquipment(){
+    const key = document.getElementById('equipSelect').value;
+    const d = EQUIP_DATA[key];
+    document.getElementById('equipUptime').textContent = d.uptime;
+    document.getElementById('equipLastMaint').textContent = d.lastMaint;
+    document.getElementById('equipNextMaint').textContent = d.nextMaint;
+    document.getElementById('equipRUL').textContent = d.rul;
+    const tbody = document.getElementById('equipMaintTable');
+    tbody.innerHTML = d.rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+
+    const chart = EQUIP_CHART_DATA[key][currentEquipPeriod];
+    const n = chart.y.length;
+    const x0 = 40, x1 = 560;
+    const xs = n > 1 ? Array.from({length:n}, (_,i)=> x0 + (x1-x0)*i/(n-1)) : [ (x0+x1)/2 ];
+
+    const gridGroup = document.getElementById('equipGridLines');
+    gridGroup.innerHTML = xs.map(x=> `<line class="chart-gridline" x1="${x}" y1="15" x2="${x}" y2="200"></line>`).join('');
+
+    document.getElementById('equipChartLine').setAttribute('points', xs.map((x,i)=> x+','+chart.y[i]).join(' '));
+
+    const dotsGroup = document.getElementById('equipDotsGroup');
+    dotsGroup.innerHTML = xs.map((x,i)=>
+      `<circle cx="${x}" cy="${chart.y[i]}" r="${i===n-1?3.6:3}" fill="${chart.colors[i]}"></circle>`
+    ).join('');
+
+    const labels = EQUIP_PERIOD_LABELS[currentEquipPeriod];
+    const labelsGroup = document.getElementById('equipXLabels');
+    labelsGroup.innerHTML = xs.map((x,i)=> `<text class="chart-label" x="${i===n-1?x-14:x}" y="215">${labels[i]}</text>`).join('');
+
+    document.getElementById('equipTrendTitle').textContent = EQUIP_TREND_TITLE_TPL.replace('{period}', EQUIP_PERIOD_NAME[currentEquipPeriod]);
+  }
+
+  // ---- History view ----
+  const PROCESS_LINE_MAP = {"CELL": ["L01", "L02", "L03", "L04", "L05", "L06"], "INGOT": ["L01", "L02"], "WAFER": ["L01", "L02"], "MODULE": ["L01", "L02"]};
+  const TYPE_BY_PROCESS = {"CELL": ["미세균열", "색상 불균일", "진동 이상", "베어링 마모 징후"], "INGOT": ["결정결함", "기공결함"], "WAFER": ["두께 편차", "표면 스크래치"], "MODULE": ["실링 불량", "배선 접촉불량"]};
+  const HIST_ALL_LABEL = 'All';
+
+  function onHistProcessChange(){
+    const proc = document.getElementById('histProcessFilter').value;
+    const lineSel = document.getElementById('histLineFilter');
+    const typeSel = document.getElementById('histTypeFilter');
+    lineSel.innerHTML = '<option value="All">' + HIST_ALL_LABEL + '</option>'
+      + PROCESS_LINE_MAP[proc].map(v => `<option value="${v}">${v}</option>`).join('');
+    typeSel.innerHTML = '<option value="All">' + HIST_ALL_LABEL + '</option>'
+      + TYPE_BY_PROCESS[proc].map(v => `<option value="${v}">${v}</option>`).join('');
+  }
+
+  const HIST_TREND_DATA = {"CELL": [110, 100, 120, 70, 90, 50], "INGOT": [125, 120, 128, 105, 115, 90], "WAFER": [122, 115, 126, 95, 108, 75], "MODULE": [130, 126, 132, 115, 122, 100]};
+  const HIST_CHART_TITLE_TPL = '{proc} 불량률 추이';
+  const HIST_GRANULARITY_LABEL = {"day": "일별", "week": "주별", "month": "월별"};
+
+  function interpolateArray(base, n){
+    if(n <= 1) return [base[base.length - 1]];
+    const out = [];
+    for(let i = 0; i < n; i++){
+      const pos = (i / (n - 1)) * (base.length - 1);
+      const lo = Math.floor(pos), hi = Math.ceil(pos);
+      const frac = pos - lo;
+      out.push(base[lo] + (base[hi] - base[lo]) * frac);
+    }
+    return out;
+  }
+
+  function pad2(n){ return String(n).padStart(2, '0'); }
+
+  function computeHistBuckets(dateFrom, dateTo){
+    const from = new Date(dateFrom + 'T00:00:00');
+    const to = new Date(dateTo + 'T00:00:00');
+    const diffDays = Math.max(1, Math.round((to - from) / 86400000) + 1);
+
+    if(diffDays <= 7){
+      const n = Math.max(2, diffDays);
+      const labels = [];
+      for(let i = 0; i < n; i++){
+        const d = new Date(from.getTime() + i * 86400000);
+        labels.push(pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()));
+      }
+      return { n, labels, granularity: 'day' };
+    } else if(diffDays <= 60){
+      const n = Math.min(6, Math.max(2, Math.ceil(diffDays / 7)));
+      const labels = [];
+      for(let i = 0; i < n; i++){
+        const d = new Date(from.getTime() + i * Math.floor(diffDays / n) * 86400000);
+        labels.push(pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()));
+      }
+      return { n, labels, granularity: 'week' };
+    } else {
+      const months = Math.max(2, Math.min(6, Math.round(diffDays / 30)));
+      const labels = [];
+      for(let i = 0; i < months; i++){
+        const d = new Date(from.getFullYear(), from.getMonth() + i, 1);
+        labels.push(d.getFullYear() + '-' + pad2(d.getMonth() + 1));
+      }
+      return { n: months, labels, granularity: 'month' };
+    }
+  }
+
+  function renderHistTrend(proc){
+    const dateFrom = document.getElementById('histDateFrom').value;
+    const dateTo = document.getElementById('histDateTo').value;
+    const { n, labels, granularity } = computeHistBuckets(dateFrom, dateTo);
+    const y = interpolateArray(HIST_TREND_DATA[proc], n);
+
+    const x0 = 40, x1 = 540;
+    const xs = n > 1 ? Array.from({length:n}, (_,i)=> x0 + (x1-x0)*i/(n-1)) : [(x0+x1)/2];
+
+    const gridGroup = document.getElementById('histGridLines');
+    gridGroup.innerHTML = xs.map(x=> `<line class="chart-gridline" x1="${x}" y1="15" x2="${x}" y2="130"></line>`).join('');
+
+    document.getElementById('histTrendLine').setAttribute('points', xs.map((x,i)=> x+','+y[i]).join(' '));
+
+    const dots = document.getElementById('histTrendDots');
+    dots.innerHTML = xs.map((x,i)=>{
+      const isLast = i === n - 1;
+      return `<circle cx="${x}" cy="${y[i]}" r="${isLast?3.4:3}" fill="${isLast?'#FF5C5C':'#F5A524'}"></circle>`;
+    }).join('');
+
+    const labelsGroup = document.getElementById('histXLabels');
+    labelsGroup.innerHTML = xs.map((x,i)=> `<text x="${i===n-1?x-16:x}" y="145" class="chart-label">${labels[i]}</text>`).join('');
+
+    document.getElementById('histChartTitle').textContent =
+      HIST_CHART_TITLE_TPL.replace('{proc}', proc) + ' · ' + HIST_GRANULARITY_LABEL[granularity];
+  }
+
+  function applyHistoryFilter(){
+    const proc = document.getElementById('histProcessFilter').value;
+    const lineVal = document.getElementById('histLineFilter').value;
+    const typeVal = document.getElementById('histTypeFilter').value;
+    const dateFrom = document.getElementById('histDateFrom').value;
+    const dateTo = document.getElementById('histDateTo').value;
+    let count = 0;
+    document.querySelectorAll('#historyTableBody tr').forEach(row=>{
+      const okProc = row.dataset.process === proc;
+      const okLine = (lineVal === 'All') || (row.dataset.line === lineVal);
+      const okType = (typeVal === 'All') || (row.dataset.type === typeVal);
+      const rowDate = row.cells[0].textContent.slice(0, 10);
+      const okDate = (!dateFrom || rowDate >= dateFrom) && (!dateTo || rowDate <= dateTo);
+      const show = okProc && okLine && okType && okDate;
+      row.style.display = show ? '' : 'none';
+      if(show) count++;
+    });
+    renderHistTrend(proc);
+    showToast('조회 완료', HIST_FILTERED_TPL.replace('{n}', count), 'info');
+  }
+
+  // ---- Alerts view ----
+  let currentAlertFilter = 'all';
+  function setAlertFilter(f){
+    document.querySelectorAll('.filter-tab').forEach(b=>b.classList.remove('active'));
+    document.getElementById('filterBtn-'+f).classList.add('active');
+    currentAlertFilter = f;
+    applyAlertFilter();
+  }
+  function applyAlertFilter(){
+    const procSel = document.getElementById('alertProcessFilter');
+    const proc = procSel ? procSel.value : 'ALL';
+    document.querySelectorAll('#alertsTableBody tr').forEach(row=>{
+      const okStatus = currentAlertFilter === 'all' || row.dataset.status === currentAlertFilter;
+      const okProc = proc === 'ALL' || row.dataset.process === proc;
+      row.style.display = (okStatus && okProc) ? '' : 'none';
+    });
+  }
+  const ALERT_STATUS_LABEL = {"pending": "대기", "progress": "진행중", "done": "완료"};
+  function cycleAlertStatus(rowId){
+    const row = document.getElementById(rowId);
+    const badge = row.querySelector('.status-badge');
+    const btn = row.querySelector('.action-btn');
+    const cur = row.dataset.status;
+    const next = cur === 'pending' ? 'progress' : 'done';
+    row.dataset.status = next;
+    badge.textContent = ALERT_STATUS_LABEL[next];
+    badge.className = 'status-badge ' + next;
+    if(next === 'done'){ btn.disabled = true; btn.textContent = '완료됨'; }
+    applyAlertFilter();
+  }
+
+  // ---- init ----
+  onEquipProcessChange();
+  onHistProcessChange();
+  renderHistTrend('CELL');
+  renderFactory('daily');
+  renderFleet();
+  rebuildLineSelect('cell', '03');
+  loadRcaScenario('cell');
+  updateSysSub();
+  updateBadge();
+</script>
+</body>
+</html>
+
+</body>
+</html>
